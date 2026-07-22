@@ -43,6 +43,9 @@ let calendar: Calendar;
 let statusTimer: number | undefined;
 let activeEventId: string | undefined;
 
+const TIME_GRID_HEIGHT = "clamp(560px, 72vh, 720px)";
+const WEEKDAY_CODES = ["MO", "TU", "WE", "TH", "FR", "SA", "SU"] as const;
+
 const statusText = $<HTMLElement>("[data-status-text]");
 const statusDot = $<HTMLElement>("[data-status-dot]");
 const retryButton = $<HTMLButtonElement>("[data-retry-sync]");
@@ -169,14 +172,15 @@ function fullCalendarOptions(): CalendarOptions {
     timeZone: state.profile.timezone,
     firstDay: state.profile.weekStart,
     headerToolbar: false,
-    height: "auto" as const,
+    height: TIME_GRID_HEIGHT,
+    stickyHeaderDates: true,
     nowIndicator: true,
     editable: true,
     selectable: true,
     dayMaxEvents: 3,
-    slotMinTime: "06:00:00",
-    slotMaxTime: "23:00:00",
-    scrollTime: "08:00:00",
+    slotMinTime: "00:00:00",
+    slotMaxTime: "24:00:00",
+    scrollTime: "00:00:00",
     eventTimeFormat: { hour: "numeric", minute: "2-digit", meridiem: "short" },
     events: state.events.filter((event) => !event.deletedAt).map(calendarEventInput),
     dateClick: (info: DateClickArg) => {
@@ -227,6 +231,24 @@ function setFormValue(form: HTMLFormElement, name: string, value: string | numbe
   else control.value = value == null ? "" : String(value);
 }
 
+function weekdayCode(value: Date): string {
+  const weekday = DateTime.fromJSDate(value).setZone(state.profile.timezone).weekday;
+  return WEEKDAY_CODES[weekday - 1];
+}
+
+function setRecurrenceWeekdays(values: string[]): void {
+  const selected = new Set(values.map((value) => value.toUpperCase()));
+  $$<HTMLInputElement>("[name='recurrenceWeekday']", eventForm).forEach((checkbox) => {
+    checkbox.checked = selected.has(checkbox.value);
+  });
+}
+
+function updateRecurrenceControls(): void {
+  const frequency = $<HTMLSelectElement>("[data-recurrence-frequency]", eventForm).value;
+  const weekdays = $<HTMLFieldSetElement>("[data-recurrence-weekdays]", eventForm);
+  weekdays.hidden = frequency !== "weekly";
+}
+
 function openEventDialog(id?: string, date = selectedDate): void {
   activeEventId = id;
   eventForm.reset();
@@ -245,14 +267,12 @@ function openEventDialog(id?: string, date = selectedDate): void {
   setFormValue(eventForm, "subjectId", existing?.subjectId);
   setFormValue(eventForm, "classId", existing?.classId);
   setFormValue(eventForm, "topicId", existing?.topicId);
-  setFormValue(eventForm, "availability", existing?.availability ?? "busy");
-  setFormValue(eventForm, "location", existing?.location);
-  setFormValue(eventForm, "latitude", existing?.latitude);
-  setFormValue(eventForm, "longitude", existing?.longitude);
   setFormValue(eventForm, "url", existing?.url);
   setFormValue(eventForm, "recurrenceFrequency", existing?.recurrence?.frequency);
   setFormValue(eventForm, "recurrenceInterval", existing?.recurrence?.interval ?? 1);
   setFormValue(eventForm, "recurrenceUntil", existing?.recurrence?.until);
+  setRecurrenceWeekdays(existing?.recurrence?.byWeekday?.length ? existing.recurrence.byWeekday : [weekdayCode(start)]);
+  updateRecurrenceControls();
   setFormValue(eventForm, "travelMinutes", existing?.travelMinutes ?? 0);
   setFormValue(eventForm, "alerts", existing?.alerts.join(", ") ?? "15");
   setFormValue(eventForm, "notes", existing?.notes);
@@ -274,16 +294,21 @@ async function saveEventFromForm(): Promise<void> {
   const existing = activeEventId ? state.events.find((event) => event.id === activeEventId) : undefined;
   const now = isoNow();
   const frequency = String(data.get("recurrenceFrequency") ?? "");
+  const byWeekday = data.getAll("recurrenceWeekday").map(String);
+  if (frequency === "weekly" && !byWeekday.length) {
+    toast("Choose at least one day for a weekly repeat.", "error");
+    return;
+  }
   const event: CalendarEventRecord = {
     id: existing?.id ?? uid(), title: String(data.get("title")).trim(), startAt, endAt,
     allDay: data.get("allDay") === "on", timezone: String(data.get("timezone")),
     subjectId: String(data.get("subjectId") || "") || undefined, classId: String(data.get("classId") || "") || undefined,
-    topicId: String(data.get("topicId") || "") || undefined, location: String(data.get("location") || "") || undefined,
-    latitude: data.get("latitude") ? Number(data.get("latitude")) : undefined, longitude: data.get("longitude") ? Number(data.get("longitude")) : undefined,
+    topicId: String(data.get("topicId") || "") || undefined, location: existing?.location,
+    latitude: existing?.latitude, longitude: existing?.longitude,
     url: String(data.get("url") || "") || undefined, notes: String(data.get("notes") || "") || undefined,
-    availability: String(data.get("availability")) as CalendarEventRecord["availability"], travelMinutes: Number(data.get("travelMinutes") || 0),
+    availability: existing?.availability ?? "busy", travelMinutes: Number(data.get("travelMinutes") || 0),
     alerts: String(data.get("alerts") || "").split(",").map((value) => Number(value.trim())).filter((value) => Number.isFinite(value) && value >= 0),
-    recurrence: frequency ? { frequency: frequency as NonNullable<CalendarEventRecord["recurrence"]>["frequency"], interval: Math.max(1, Number(data.get("recurrenceInterval") || 1)), until: String(data.get("recurrenceUntil") || "") || undefined } : undefined,
+    recurrence: frequency ? { frequency: frequency as NonNullable<CalendarEventRecord["recurrence"]>["frequency"], interval: Math.max(1, Number(data.get("recurrenceInterval") || 1)), until: String(data.get("recurrenceUntil") || "") || undefined, byWeekday: frequency === "weekly" ? byWeekday : undefined } : undefined,
     recurrenceSeriesId: existing?.recurrenceSeriesId, originalStartAt: existing?.originalStartAt,
     participants: existing?.participants ?? [], attachments: existing?.attachments ?? [], origin: existing?.origin ?? "web",
     version: (existing?.version ?? 0) + 1, createdAt: existing?.createdAt ?? now, updatedAt: now, deletedAt: existing?.deletedAt,
@@ -438,6 +463,7 @@ function renderLabelManager(): void {
 
 async function addLabelFromForm(): Promise<void> {
   const form = $<HTMLFormElement>("[data-label-form]");
+  if (!form.reportValidity()) return;
   const data = new FormData(form);
   const name = String(data.get("name") || "").trim();
   if (!name) return;
@@ -544,8 +570,9 @@ function initializeInteractions(): void {
   $("[data-calendar-next]").addEventListener("click", () => calendar.next());
   $("[data-calendar-today]").addEventListener("click", () => { calendar.today(); selectedDate = DateTime.now().setZone(state.profile.timezone).startOf("day").toJSDate(); renderAgenda(); });
   $$<HTMLButtonElement>("[data-view]").forEach((button) => button.addEventListener("click", async () => {
-    calendar.changeView(button.dataset.view!);
-    state.profile.calendarView = button.dataset.view as Profile["calendarView"];
+    const view = button.dataset.view as Profile["calendarView"];
+    calendar.changeView(view);
+    state.profile.calendarView = view;
     await persist(() => repository.saveProfile(state.profile));
   }));
   $("[data-add-event]").addEventListener("click", () => openEventDialog());
@@ -563,6 +590,7 @@ function initializeInteractions(): void {
   $("[data-save-session]").addEventListener("click", (event) => { event.preventDefault(); void saveSessionFromForm(); });
   $("[data-add-label]").addEventListener("click", (event) => { event.preventDefault(); void addLabelFromForm(); });
   $("[data-save-settings]").addEventListener("click", (event) => { event.preventDefault(); void saveSettings(); });
+  $("[data-recurrence-frequency]").addEventListener("change", updateRecurrenceControls);
   $("[data-revision-search]").addEventListener("input", renderRevisionTable);
   $("[data-revision-filter]").addEventListener("change", renderRevisionTable);
   $("[data-revision-sort]").addEventListener("change", renderRevisionTable);

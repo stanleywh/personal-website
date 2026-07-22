@@ -18,13 +18,13 @@ describe("calendar export", () => {
     const event: CalendarEventRecord = {
       id: "event-id", title: "Biology, cells", startAt: "2026-07-22T09:00:00.000Z", endAt: "2026-07-22T10:00:00.000Z",
       allDay: false, timezone: "Asia/Hong_Kong", notes: "Review; then\nquestions", availability: "busy", travelMinutes: 0,
-      alerts: [15], recurrence: { frequency: "weekly", interval: 1, until: "2026-09-01" }, origin: "web", version: 1,
+      alerts: [15], recurrence: { frequency: "weekly", interval: 1, until: "2026-09-01", byWeekday: ["MO", "TU", "FR"] }, origin: "web", version: 1,
       createdAt: "2026-07-20T00:00:00.000Z", updatedAt: "2026-07-20T00:00:00.000Z",
     };
     const output = eventsToIcs([event]);
     expect(output).toContain("SUMMARY:Biology\\, cells");
     expect(output).toContain("DESCRIPTION:Review\\; then\\nquestions");
-    expect(output).toContain("RRULE:FREQ=WEEKLY;INTERVAL=1;UNTIL=20260901T235959Z");
+    expect(output).toContain("RRULE:FREQ=WEEKLY;INTERVAL=1;UNTIL=20260901T235959Z;BYDAY=MO,TU,FR");
     expect(output).toContain("TRIGGER:-PT15M");
   });
 
