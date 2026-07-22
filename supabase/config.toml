@@ -1,0 +1,4 @@
+project_id = "revision-tracker"
+
+[functions.delete-account]
+verify_jwt = true

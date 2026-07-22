@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>CFBundleDisplayName</key><string>Revision Tracker</string>
+  <key>CFBundleIdentifier</key><string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+  <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
+  <key>CFBundleName</key><string>$(PRODUCT_NAME)</string>
+  <key>CFBundlePackageType</key><string>APPL</string>
+  <key>CFBundleShortVersionString</key><string>$(MARKETING_VERSION)</string>
+  <key>CFBundleVersion</key><string>$(CURRENT_PROJECT_VERSION)</string>
+  <key>NSCalendarsFullAccessUsageDescription</key><string>Revision Tracker synchronizes only the dedicated Revision Tracker calendar with your private study plan.</string>
+  <key>SUPABASE_URL</key><string>https://YOUR_PROJECT.supabase.co</string>
+  <key>SUPABASE_ANON_KEY</key><string>YOUR_PUBLIC_ANON_KEY</string>
+  <key>CFBundleURLTypes</key><array><dict><key>CFBundleURLSchemes</key><array><string>revisiontracker</string></array></dict></array>
+  <key>UILaunchScreen</key><dict/>
+</dict></plist>
