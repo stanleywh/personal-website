@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Plan revision sessions, track mastery, and keep your study calendar in one place.">
+  <title>Revision Tracker — Stanley</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+  <script type="module" src="/src/tracker/main.ts"></script>
+</head>
+<body class="tracker">
+  <a class="skip-link" href="#calendar">Skip to calendar</a>
+
+  <div class="tracker-shell">
+    <header class="tracker-header reveal" style="--reveal-order: 0">
+      <a class="back-link" href="index.html" aria-label="Back to home">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14.5 6-6 6 6 6M9 12h10"></path></svg>
+        <span>Home</span>
+      </a>
+      <div class="tracker-heading">
+        <h1>Revision Tracker</h1>
+      </div>
+      <div class="account-actions">
+        <div class="status-strip reveal" style="--reveal-order: 1" role="status" aria-live="polite">
+          <span class="status-dot" data-status-dot></span>
+          <span data-status-text>Saved on this device</span>
+          <button class="status-action" type="button" data-retry-sync hidden>Retry</button>
+        </div>
+        <button class="icon-button" type="button" data-open-settings aria-label="Open settings">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.09a2 2 0 0 1 1 1.74v.5a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.09a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2Z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+        </button>
+        <button class="button button--quiet" type="button" data-auth-button>Cloud sign in</button>
+      </div>
+    </header>
+
+    <main>
+      <section class="calendar-card reveal" style="--reveal-order: 2" aria-labelledby="calendar-title">
+        <div class="calendar-toolbar">
+          <div>
+            <p class="section-kicker">Calendar</p>
+            <h2 id="calendar-title" data-calendar-title>Today</h2>
+          </div>
+          <div class="calendar-toolbar__actions">
+            <div class="button-group" aria-label="Calendar navigation">
+              <button class="icon-button icon-button--compact" type="button" data-calendar-prev aria-label="Previous period">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14.5 6-6 6 6 6"></path></svg>
+              </button>
+              <button class="button button--quiet button--compact" type="button" data-calendar-today>Today</button>
+              <button class="icon-button icon-button--compact" type="button" data-calendar-next aria-label="Next period">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9.5 6 6 6-6 6"></path></svg>
+              </button>
+            </div>
+            <div class="segmented" role="group" aria-label="Calendar view">
+              <button type="button" data-view="dayGridMonth" aria-pressed="true">Month</button>
+              <button type="button" data-view="timeGridWeek" aria-pressed="false">Week</button>
+              <button type="button" data-view="timeGridDay" aria-pressed="false">Day</button>
+            </div>
+            <button class="button button--primary" type="button" data-add-event>
+              <span aria-hidden="true">+</span> Event
+            </button>
+          </div>
+        </div>
+
+        <div class="calendar-layout">
+          <div id="calendar" aria-label="Revision calendar"></div>
+          <aside class="agenda" aria-labelledby="agenda-title">
+            <div class="agenda__header">
+              <div>
+                <p class="section-kicker">Selected day</p>
+                <h3 id="agenda-title" data-agenda-date>Today</h3>
+              </div>
+              <button class="icon-button icon-button--compact" type="button" data-agenda-add aria-label="Add an event on the selected day">+</button>
+            </div>
+            <div class="agenda__list" data-agenda-list></div>
+          </aside>
+        </div>
+      </section>
+
+      <section class="revision-card reveal" style="--reveal-order: 3" aria-labelledby="revision-title">
+        <div class="section-header">
+          <div>
+            <p class="section-kicker">Progress</p>
+            <h2 id="revision-title">Revision table</h2>
+            <p class="section-description">Stars show mastery. Log each session to keep the latest revision date accurate.</p>
+          </div>
+          <div class="section-header__actions">
+            <button class="button button--quiet" type="button" data-manage-labels>Manage labels</button>
+            <button class="button button--primary" type="button" data-add-revision>+ Revision item</button>
+          </div>
+        </div>
+
+        <div class="table-tools">
+          <label class="search-field">
+            <span class="sr-only">Search revision items</span>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"></circle><path d="m16 16 4 4"></path></svg>
+            <input type="search" placeholder="Search topics or classes" data-revision-search>
+          </label>
+          <label>
+            <span class="sr-only">Filter by label</span>
+            <select data-revision-filter><option value="">All labels</option></select>
+          </label>
+          <label>
+            <span class="sr-only">Sort revision items</span>
+            <select data-revision-sort>
+              <option value="updated">Recently updated</option>
+              <option value="oldest">Least recently revised</option>
+              <option value="mastery-asc">Lowest mastery</option>
+              <option value="mastery-desc">Highest mastery</option>
+              <option value="title">Title A–Z</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th scope="col">Revision item</th><th scope="col">Labels</th><th scope="col">Mastery</th><th scope="col">Last revised</th><th scope="col">Sessions</th><th scope="col"><span class="sr-only">Actions</span></th></tr></thead>
+            <tbody data-revision-body></tbody>
+          </table>
+          <div class="empty-state" data-revision-empty hidden>
+            <div class="empty-state__icon" aria-hidden="true">✦</div>
+            <h3>No revision items yet</h3>
+            <p>Add a topic or class, choose its mastery level, then log each study session.</p>
+            <button class="button button--primary" type="button" data-empty-add-revision>Add your first item</button>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="tracker-footer">
+      <p>Your data is private to your account. <button type="button" data-open-privacy>Privacy &amp; calendar access</button></p>
+      <button type="button" data-export-all>Export all events (.ics)</button>
+    </footer>
+  </div>
+
+  <dialog class="modal" data-event-dialog aria-labelledby="event-dialog-title">
+    <form method="dialog" data-event-form>
+      <div class="modal__header">
+        <div><p class="section-kicker">Calendar event</p><h2 id="event-dialog-title" data-event-dialog-title>New event</h2></div>
+        <button class="icon-button" value="cancel" formnovalidate aria-label="Close event editor">×</button>
+      </div>
+      <input type="hidden" name="id">
+      <div class="form-grid">
+        <label class="field field--wide"><span>Title</span><input name="title" required maxlength="120" placeholder="Past paper practice"></label>
+        <label class="field"><span>Starts</span><input name="start" type="datetime-local" required></label>
+        <label class="field"><span>Ends</span><input name="end" type="datetime-local" required></label>
+        <label class="check-field"><input name="allDay" type="checkbox"><span>All-day event</span></label>
+        <label class="field"><span>Timezone</span><input name="timezone" list="timezone-list" required></label>
+        <label class="field"><span>Subject</span><select name="subjectId"><option value="">No subject</option></select></label>
+        <label class="field"><span>Class</span><select name="classId"><option value="">No class</option></select></label>
+        <label class="field"><span>Topic</span><select name="topicId"><option value="">No topic</option></select></label>
+        <label class="field field--wide"><span>URL</span><input name="url" type="url" placeholder="https://…"></label>
+        <label class="field"><span>Repeat</span><select name="recurrenceFrequency" data-recurrence-frequency><option value="">Never</option><option value="daily">Daily</option><option value="weekly">Weekly / custom days</option><option value="monthly">Monthly</option><option value="yearly">Yearly</option></select></label>
+        <label class="field"><span>Every</span><input name="recurrenceInterval" type="number" min="1" max="99" value="1"></label>
+        <fieldset class="weekday-field field--wide" data-recurrence-weekdays hidden>
+          <legend>Repeat on</legend>
+          <div>
+            <label><input type="checkbox" name="recurrenceWeekday" value="MO"><span>Mon</span></label>
+            <label><input type="checkbox" name="recurrenceWeekday" value="TU"><span>Tue</span></label>
+            <label><input type="checkbox" name="recurrenceWeekday" value="WE"><span>Wed</span></label>
+            <label><input type="checkbox" name="recurrenceWeekday" value="TH"><span>Thu</span></label>
+            <label><input type="checkbox" name="recurrenceWeekday" value="FR"><span>Fri</span></label>
+            <label><input type="checkbox" name="recurrenceWeekday" value="SA"><span>Sat</span></label>
+            <label><input type="checkbox" name="recurrenceWeekday" value="SU"><span>Sun</span></label>
+          </div>
+        </fieldset>
+        <label class="field"><span>Repeat until</span><input name="recurrenceUntil" type="date"></label>
+        <label class="field"><span>Travel time</span><select name="travelMinutes"><option value="0">None</option><option value="5">5 minutes</option><option value="15">15 minutes</option><option value="30">30 minutes</option><option value="60">1 hour</option><option value="90">1.5 hours</option><option value="120">2 hours</option></select></label>
+        <label class="field field--wide"><span>Alerts <small>(minutes before, comma separated)</small></span><input name="alerts" placeholder="15, 60"></label>
+        <label class="field field--wide"><span>Notes</span><textarea name="notes" rows="4" maxlength="2000" placeholder="What should you cover?"></textarea></label>
+      </div>
+      <div class="modal__footer">
+        <div class="modal__footer-start">
+          <button class="button button--danger" type="button" data-delete-event hidden>Delete</button>
+          <button class="button button--quiet" type="button" data-export-event hidden>Export .ics</button>
+        </div>
+        <button class="button button--quiet" value="cancel" formnovalidate>Cancel</button>
+        <button class="button button--primary" value="default" data-save-event>Save event</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog class="modal modal--narrow" data-revision-dialog aria-labelledby="revision-dialog-title">
+    <form method="dialog" data-revision-form>
+      <div class="modal__header"><div><p class="section-kicker">Revision table</p><h2 id="revision-dialog-title" data-revision-dialog-title>New item</h2></div><button class="icon-button" value="cancel" formnovalidate aria-label="Close">×</button></div>
+      <input type="hidden" name="id">
+      <div class="form-grid">
+        <label class="field field--wide"><span>Title</span><input name="title" required maxlength="120" placeholder="Cell structure"></label>
+        <label class="field"><span>Subject</span><select name="subjectId"><option value="">No subject</option></select></label>
+        <label class="field"><span>Class</span><select name="classId"><option value="">No class</option></select></label>
+        <label class="field"><span>Topic</span><select name="topicId"><option value="">No topic</option></select></label>
+        <fieldset class="rating-field field--wide"><legend>Mastery</legend><div data-revision-rating></div><p>1 = needs work · 5 = mastered</p></fieldset>
+        <label class="field field--wide"><span>Notes</span><textarea name="notes" rows="4" maxlength="2000"></textarea></label>
+      </div>
+      <div class="modal__footer"><button class="button button--quiet" value="cancel" formnovalidate>Cancel</button><button class="button button--primary" value="default" data-save-revision>Save item</button></div>
+    </form>
+  </dialog>
+
+  <dialog class="modal modal--narrow" data-session-dialog aria-labelledby="session-dialog-title">
+    <form method="dialog" data-session-form>
+      <div class="modal__header"><div><p class="section-kicker">Revision session</p><h2 id="session-dialog-title">Log revision</h2><p data-session-item-name></p></div><button class="icon-button" value="cancel" formnovalidate aria-label="Close">×</button></div>
+      <input type="hidden" name="revisionItemId"><input type="hidden" name="sourceEventId">
+      <div class="form-grid">
+        <label class="field field--wide"><span>Date and time</span><input name="revisedAt" type="datetime-local" required></label>
+        <label class="field"><span>Duration</span><div class="input-suffix"><input name="durationMinutes" type="number" min="1" max="1440" value="45"><span>min</span></div></label>
+        <fieldset class="rating-field field--wide"><legend>Mastery after this session</legend><div data-session-rating></div></fieldset>
+        <label class="field field--wide"><span>Notes</span><textarea name="notes" rows="3" maxlength="1000"></textarea></label>
+      </div>
+      <div class="modal__footer"><button class="button button--quiet" value="cancel" formnovalidate>Cancel</button><button class="button button--primary" value="default" data-save-session>Log session</button></div>
+    </form>
+  </dialog>
+
+  <dialog class="modal" data-label-dialog aria-labelledby="label-dialog-title">
+    <form method="dialog" data-label-form>
+      <div class="modal__header"><div><p class="section-kicker">Organise</p><h2 id="label-dialog-title">Subjects, classes &amp; topics</h2></div><button class="icon-button" value="cancel" formnovalidate aria-label="Close">×</button></div>
+      <div class="label-manager" data-label-manager></div>
+      <div class="label-add-row">
+        <label class="field"><span>Type</span><select name="kind"><option value="subject">Subject</option><option value="class">Class</option><option value="topic">Topic</option></select></label>
+        <label class="field"><span>Name</span><input name="name" required maxlength="60" placeholder="Biology"></label>
+        <label class="field field--color"><span>Colour</span><input name="color" type="color" value="#8a7055"></label>
+        <button class="button button--primary" value="default" data-add-label>Add label</button>
+      </div>
+      <div class="modal__footer"><button class="button button--primary" value="cancel" formnovalidate>Done</button></div>
+    </form>
+  </dialog>
+
+  <dialog class="modal modal--narrow" data-auth-dialog aria-labelledby="auth-dialog-title">
+    <form method="dialog" data-auth-form>
+      <div class="modal__header"><div><p class="section-kicker">Cloud sync</p><h2 id="auth-dialog-title">Continue by email</h2></div><button class="icon-button" value="cancel" formnovalidate aria-label="Close">×</button></div>
+      <p class="modal-copy">We’ll email you a secure sign-in link. No password needed.</p>
+      <label class="field"><span>Email address</span><input name="email" type="email" autocomplete="email" required placeholder="you@example.com"></label>
+      <p class="form-message" data-auth-message aria-live="polite"></p>
+      <div class="modal__footer"><button class="button button--quiet" value="cancel" formnovalidate>Cancel</button><button class="button button--primary" value="default" data-send-magic-link>Email me a link</button></div>
+    </form>
+  </dialog>
+
+  <dialog class="modal modal--narrow" data-settings-dialog aria-labelledby="settings-dialog-title">
+    <form method="dialog" data-settings-form>
+      <div class="modal__header"><div><p class="section-kicker">Preferences</p><h2 id="settings-dialog-title">Settings</h2></div><button class="icon-button" value="cancel" formnovalidate aria-label="Close">×</button></div>
+      <label class="field"><span>Timezone</span><input name="timezone" list="timezone-list" required></label>
+      <label class="field"><span>First day of the week</span><select name="weekStart"><option value="1">Monday</option><option value="0">Sunday</option><option value="6">Saturday</option></select></label>
+      <div class="settings-account" data-settings-account></div>
+      <div class="modal__footer"><button class="button button--quiet" value="cancel" formnovalidate>Cancel</button><button class="button button--primary" value="default" data-save-settings>Save settings</button></div>
+    </form>
+  </dialog>
+
+  <dialog class="modal modal--narrow" data-privacy-dialog aria-labelledby="privacy-dialog-title">
+    <form method="dialog">
+      <div class="modal__header"><div><p class="section-kicker">Your data</p><h2 id="privacy-dialog-title">Privacy &amp; calendar access</h2></div><button class="icon-button" value="cancel" formnovalidate aria-label="Close">×</button></div>
+      <div class="prose">
+        <p>When cloud sync is configured, your tracker data is stored in Supabase and protected so only your signed-in account can read it. Without cloud sync, data stays in this browser.</p>
+        <p>The optional Apple companion requests full Calendar access only after you enable integration. It reads and changes events solely in a dedicated <strong>Revision Tracker</strong> calendar; unrelated calendars are never synchronized.</p>
+        <p>Calendar invitations and Apple-managed attachments are display-only. Deleted synchronized events remain recoverable for 30 days before permanent removal.</p>
+      </div>
+      <div class="modal__footer"><button class="button button--primary" value="cancel" formnovalidate>Done</button></div>
+    </form>
+  </dialog>
+
+  <datalist id="timezone-list"></datalist>
+  <div class="toast-region" aria-live="polite" aria-atomic="true" data-toast-region></div>
+</body>
+</html>
