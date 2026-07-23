@@ -2,14 +2,30 @@ project_id = "revision-tracker"
 
 [auth]
 site_url = "https://stanleywh.github.io/personal-website/"
+minimum_password_length = 8
+password_requirements = "lower_upper_letters_digits_symbols"
 additional_redirect_urls = [
   "https://stanleywh.github.io/personal-website/account.html",
+  "https://stanleywh.github.io/personal-website/account.html?mode=callback&next=index.html",
+  "https://stanleywh.github.io/personal-website/account.html?mode=callback&next=tracker.html",
+  "https://stanleywh.github.io/personal-website/account.html?mode=recovery&next=index.html",
+  "https://stanleywh.github.io/personal-website/account.html?mode=recovery&next=tracker.html",
   "http://localhost:5173/account.html",
+  "http://localhost:5173/account.html?mode=callback&next=index.html",
+  "http://localhost:5173/account.html?mode=callback&next=tracker.html",
+  "http://localhost:5173/account.html?mode=recovery&next=index.html",
+  "http://localhost:5173/account.html?mode=recovery&next=tracker.html",
   "http://127.0.0.1:5173/account.html",
+  "http://127.0.0.1:5173/account.html?mode=callback&next=index.html",
+  "http://127.0.0.1:5173/account.html?mode=callback&next=tracker.html",
+  "http://127.0.0.1:5173/account.html?mode=recovery&next=index.html",
+  "http://127.0.0.1:5173/account.html?mode=recovery&next=tracker.html",
   "revisiontracker://auth/callback",
 ]
 
 [auth.email]
+enable_confirmations = true
+secure_password_change = false
 max_frequency = "1m"
 otp_expiry = 3600
 

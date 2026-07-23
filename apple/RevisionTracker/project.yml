@@ -20,6 +20,7 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.stanley.revisiontracker
+        PRODUCT_MODULE_NAME: RevisionTracker
         CODE_SIGN_ENTITLEMENTS: Support/RevisionTracker-iOS.entitlements
   RevisionTracker-macOS:
     type: application
@@ -30,4 +31,15 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.stanley.revisiontracker.macos
+        PRODUCT_MODULE_NAME: RevisionTracker
         CODE_SIGN_ENTITLEMENTS: Support/RevisionTracker-macOS.entitlements
+  RevisionTrackerTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources: [Tests]
+    dependencies:
+      - target: RevisionTracker-macOS
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.stanley.revisiontracker.tests
+        PRODUCT_MODULE_NAME: RevisionTrackerTests

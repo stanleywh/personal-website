@@ -24,7 +24,9 @@ struct RevisionTrackerApp: App {
                 .task {
                     await auth.bootstrap()
                     sync.startListening()
-                    if auth.isSignedIn && bridge.permission == .authorized { await sync.sync() }
+                    if auth.isSignedIn && !auth.isRecoveringPassword && bridge.permission == .authorized {
+                        await sync.sync()
+                    }
                 }
         }
     }

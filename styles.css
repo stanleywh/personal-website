@@ -453,6 +453,27 @@
   box-shadow: 0 0 0 3px rgba(120, 99, 75, 0.1);
 }
 
+.account-password-hint,
+.account-login-help {
+  margin: -4px 0 0;
+  color: var(--muted);
+  font-size: 0.66rem;
+  line-height: 1.55;
+}
+
+.account-text-action {
+  width: fit-content;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  font-size: 0.69rem;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 .account-message {
   min-height: 20px;
   margin: 0;

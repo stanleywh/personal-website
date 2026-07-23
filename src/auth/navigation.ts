@@ -1,4 +1,11 @@
-export type AccountMode = "login" | "signup" | "callback" | "profile" | "complete-profile";
+export type AccountMode =
+  | "login"
+  | "signup"
+  | "forgot-password"
+  | "recovery"
+  | "callback"
+  | "profile"
+  | "complete-profile";
 
 const allowedDestinations = new Set(["index.html", "tracker.html", "account.html"]);
 
@@ -24,6 +31,8 @@ export function accountUrl(mode: AccountMode, next?: string): URL {
 
 export function accountMode(value: string | null): AccountMode {
   return value === "signup"
+    || value === "forgot-password"
+    || value === "recovery"
     || value === "callback"
     || value === "profile"
     || value === "complete-profile"

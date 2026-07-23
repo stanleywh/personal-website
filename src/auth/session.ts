@@ -1,12 +1,18 @@
-import type { Session, User } from "@supabase/supabase-js";
+import type { AuthChangeEvent, Session, SupabaseClient, User } from "@supabase/supabase-js";
 import {
   isAuthorizationFailure,
   isSupabaseConfigured,
-  requireSupabase,
   supabase,
 } from "./client";
+import { validatePassword } from "./password";
 
-export type AuthPhase = "loading" | "signedOut" | "signedIn" | "profileIncomplete" | "error";
+export type AuthPhase =
+  | "loading"
+  | "signedOut"
+  | "signedIn"
+  | "profileIncomplete"
+  | "passwordRecovery"
+  | "error";
 
 export interface AccountProfile {
   displayName: string | null;
@@ -55,10 +61,18 @@ function writeProfileCache(userId: string, profile: AccountProfile): void {
 }
 
 export class AuthController {
-  private snapshot: AuthSnapshot = { ...initialSnapshot };
+  private snapshot: AuthSnapshot;
   private listeners = new Set<AuthListener>();
   private initializePromise?: Promise<AuthSnapshot>;
   private authSubscription?: { unsubscribe(): void };
+  private recoveryActive = false;
+
+  constructor(private readonly client: SupabaseClient | null = supabase) {
+    this.snapshot = {
+      ...initialSnapshot,
+      configured: Boolean(client),
+    };
+  }
 
   get state(): AuthSnapshot {
     return this.snapshot;
@@ -81,7 +95,7 @@ export class AuthController {
   }
 
   private async initializeInternal(): Promise<AuthSnapshot> {
-    if (!supabase) {
+    if (!this.client) {
       return this.emit({
         ...initialSnapshot,
         phase: "error",
@@ -101,12 +115,15 @@ export class AuthController {
       });
     }
 
-    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
-      void this.applySession(session);
+    const { data: authListener } = this.client.auth.onAuthStateChange((event, session) => {
+      this.handleAuthEvent(event, session);
     });
     this.authSubscription = authListener.subscription;
 
-    const { data, error } = await supabase.auth.getSession();
+    const { data, error } = await this.client.auth.getSession();
+    if (window.location.hash) {
+      window.history.replaceState({}, "", `${window.location.pathname}${window.location.search}`);
+    }
     if (error) {
       return this.emit({
         ...initialSnapshot,
@@ -118,14 +135,34 @@ export class AuthController {
     return this.applySession(data.session);
   }
 
+  private handleAuthEvent(event: AuthChangeEvent, session: Session | null): void {
+    if (event === "PASSWORD_RECOVERY") this.recoveryActive = Boolean(session);
+    if (event === "SIGNED_OUT") this.recoveryActive = false;
+    void this.applySession(session);
+  }
+
   private async applySession(session: Session | null): Promise<AuthSnapshot> {
     if (!session) {
       return this.emit({
         phase: "signedOut",
-        configured: isSupabaseConfigured,
+        configured: Boolean(this.client),
         session: null,
         user: null,
         profile: null,
+      });
+    }
+
+    const fallback = readProfileCache(session.user.id) ?? {
+      displayName: normalizeDisplayName(session.user.user_metadata.display_name),
+    };
+
+    if (this.recoveryActive) {
+      return this.emit({
+        phase: "passwordRecovery",
+        configured: true,
+        session,
+        user: session.user,
+        profile: fallback,
       });
     }
 
@@ -137,10 +174,6 @@ export class AuthController {
       profile: null,
     });
 
-    const fallback = readProfileCache(session.user.id) ?? {
-      displayName: normalizeDisplayName(session.user.user_metadata.display_name),
-    };
-
     if (!navigator.onLine) {
       return this.emit({
         phase: fallback.displayName ? "signedIn" : "profileIncomplete",
@@ -151,7 +184,7 @@ export class AuthController {
       });
     }
 
-    const client = requireSupabase();
+    const client = this.requireClient();
     const { data, error, status } = await client
       .from("profiles")
       .select("display_name")
@@ -201,30 +234,65 @@ export class AuthController {
     });
   }
 
-  async sendMagicLink(
+  async signUp(
     email: string,
-    options: { createUser: boolean; displayName?: string; redirectTo: string },
+    password: string,
+    options: { displayName?: string; redirectTo: string },
   ): Promise<void> {
-    const client = requireSupabase();
+    const client = this.requireClient();
     const displayName = normalizeDisplayName(options.displayName);
-    if (options.createUser && !displayName) {
+    if (!displayName) {
       throw new Error("Enter a display name between 1 and 50 characters.");
     }
-    const { error } = await client.auth.signInWithOtp({
+    validatePassword(password);
+    const { error } = await client.auth.signUp({
       email: email.trim(),
+      password,
       options: {
-        shouldCreateUser: options.createUser,
         emailRedirectTo: options.redirectTo,
-        data: options.createUser
-          ? {
-              display_name: displayName,
-              timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
-              locale: navigator.language || "en-GB",
-            }
-          : undefined,
+        data: {
+          display_name: displayName,
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
+          locale: navigator.language || "en-GB",
+        },
       },
     });
     if (error) throw new Error(error.message);
+  }
+
+  async signInWithPassword(email: string, password: string): Promise<AuthSnapshot> {
+    const client = this.requireClient();
+    this.recoveryActive = false;
+    const { data, error } = await client.auth.signInWithPassword({
+      email: email.trim(),
+      password,
+    });
+    if (error) throw new Error(error.message);
+    return this.applySession(data.session);
+  }
+
+  async requestPasswordReset(email: string, redirectTo: string): Promise<void> {
+    const client = this.requireClient();
+    const { error } = await client.auth.resetPasswordForEmail(email.trim(), { redirectTo });
+    if (error) {
+      throw new Error("Password reset could not be requested right now. Try again later.");
+    }
+  }
+
+  async updatePassword(password: string): Promise<AuthSnapshot> {
+    if (!this.recoveryActive || !this.snapshot.session) {
+      throw new Error("Open a current password reset link before choosing a new password.");
+    }
+    validatePassword(password);
+    const client = this.requireClient();
+    const { error } = await client.auth.updateUser({ password });
+    if (error) throw new Error(error.message);
+    this.recoveryActive = false;
+    const { data, error: sessionError } = await client.auth.getSession();
+    if (sessionError || !data.session) {
+      throw new Error(sessionError?.message ?? "The updated session could not be restored.");
+    }
+    return this.applySession(data.session);
   }
 
   async updateDisplayName(value: string): Promise<void> {
@@ -233,7 +301,7 @@ export class AuthController {
     if (!user || !displayName) {
       throw new Error("Enter a display name between 1 and 50 characters.");
     }
-    const client = requireSupabase();
+    const client = this.requireClient();
     const { error } = await client
       .from("profiles")
       .upsert({ id: user.id, display_name: displayName });
@@ -247,13 +315,14 @@ export class AuthController {
   }
 
   async signOut(): Promise<void> {
-    if (supabase) {
-      const { error } = await supabase.auth.signOut({ scope: "local" });
+    this.recoveryActive = false;
+    if (this.client) {
+      const { error } = await this.client.auth.signOut({ scope: "local" });
       if (error) throw new Error(error.message);
     }
     this.emit({
       phase: "signedOut",
-      configured: isSupabaseConfigured,
+      configured: Boolean(this.client),
       session: null,
       user: null,
       profile: null,
@@ -262,13 +331,13 @@ export class AuthController {
 
   async deleteAccount(): Promise<string | null> {
     const userId = this.snapshot.user?.id ?? null;
-    const client = requireSupabase();
+    const client = this.requireClient();
     const { error } = await client.functions.invoke("delete-account", { method: "POST" });
     if (error) throw new Error(error.message);
     await client.auth.signOut({ scope: "local" });
     this.emit({
       phase: "signedOut",
-      configured: isSupabaseConfigured,
+      configured: Boolean(this.client),
       session: null,
       user: null,
       profile: null,
@@ -279,6 +348,11 @@ export class AuthController {
   dispose(): void {
     this.authSubscription?.unsubscribe();
     this.listeners.clear();
+  }
+
+  private requireClient(): SupabaseClient {
+    if (!this.client) throw new Error("Accounts are not configured in this build.");
+    return this.client;
   }
 }
 

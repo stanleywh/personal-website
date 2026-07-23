@@ -27,15 +27,31 @@ npm.cmd run build
 5. Set the Auth Site URL to `https://stanleywh.github.io/personal-website/`.
 6. Add these exact Auth redirect URLs:
    - `https://stanleywh.github.io/personal-website/account.html`
+   - `https://stanleywh.github.io/personal-website/account.html?mode=callback&next=index.html`
+   - `https://stanleywh.github.io/personal-website/account.html?mode=callback&next=tracker.html`
+   - `https://stanleywh.github.io/personal-website/account.html?mode=recovery&next=index.html`
+   - `https://stanleywh.github.io/personal-website/account.html?mode=recovery&next=tracker.html`
    - `http://localhost:5173/account.html`
+   - `http://localhost:5173/account.html?mode=callback&next=index.html`
+   - `http://localhost:5173/account.html?mode=callback&next=tracker.html`
+   - `http://localhost:5173/account.html?mode=recovery&next=index.html`
+   - `http://localhost:5173/account.html?mode=recovery&next=tracker.html`
    - `http://127.0.0.1:5173/account.html`
+   - `http://127.0.0.1:5173/account.html?mode=callback&next=index.html`
+   - `http://127.0.0.1:5173/account.html?mode=callback&next=tracker.html`
+   - `http://127.0.0.1:5173/account.html?mode=recovery&next=index.html`
+   - `http://127.0.0.1:5173/account.html?mode=recovery&next=tracker.html`
    - `revisiontracker://auth/callback`
-7. Configure the Magic Link email template to use the requested redirect destination, set the OTP expiry to one hour, and configure production SMTP, security notifications, CAPTCHA, and rate limits before enabling public registration.
-8. Set the `delete-account` Edge Function secret `ALLOWED_ORIGINS` to a comma-separated list containing `https://stanleywh.github.io,http://localhost:5173,http://127.0.0.1:5173`.
+7. In **Authentication → Providers → Email**, keep Email and signup enabled, keep **Confirm email** enabled, set the minimum password length to 8, and require lowercase, uppercase, digits, and symbols. Keep **Require current password to change password** disabled so existing passwordless users can complete an authenticated recovery.
+8. In **Authentication → Email Templates**, keep the Confirm signup and Reset password templates on `{{ .ConfirmationURL }}` so each requested redirect is retained. The Magic Link template is unused. Enable the password-changed security notification and verify production SMTP delivers confirmation and recovery messages. If the project plan does not allow custom templates, use Supabase's defaults.
+9. Retain the one-hour token expiry and email rate limits, and configure CAPTCHA and other production abuse controls before enabling public registration.
+10. Set the `delete-account` Edge Function secret `ALLOWED_ORIGINS` to a comma-separated list containing `https://stanleywh.github.io,http://localhost:5173,http://127.0.0.1:5173`.
 
 Every user-owned table has row-level security. Events use soft-deletion tombstones; schedule `private.purge_expired_event_tombstones()` daily with Supabase Cron as the function-owning database role for the 30-day recovery policy.
 
-The web app uses passwordless email links. Login disables implicit account creation; sign-up requires a display name and allows account creation. The display name is stored in `public.profiles` and is never used for authorization.
+The web app uses email-and-password authentication. Sign-up requires a display name and confirmation email; normal login never sends an email. Password recovery establishes an authenticated recovery session before accepting a new password. Existing passwordless users should use **Forgot password** once to add a password to their existing Supabase user. This preserves their user ID, profile, revision records, and ownership relationships without recreating or relinking any data.
+
+The display name is stored in `public.profiles` and is never used for authorization. Authentication changes do not require changes to RLS policies, grants, table ownership, profile triggers, or the account-deletion function.
 
 Tracker caches and offline queues use keys scoped by Supabase user ID. The first cloud-empty account on a browser can explicitly import, retain, or discard data from the former shared local keys.
 

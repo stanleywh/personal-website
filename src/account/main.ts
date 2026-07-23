@@ -1,4 +1,6 @@
+import type { AuthSnapshot } from "../auth/session";
 import { accountMode, accountUrl, navigateTo, safeNextPage } from "../auth/navigation";
+import { validatePasswordConfirmation } from "../auth/password";
 import { authController, profileCacheKey } from "../auth/session";
 
 document.documentElement.classList.add("js");
@@ -19,12 +21,19 @@ const displayField = $<HTMLElement>("[data-display-field]");
 const displayInput = $<HTMLInputElement>("[name=displayName]");
 const emailField = $<HTMLElement>("[data-email-field]");
 const emailInput = $<HTMLInputElement>("[name=email]");
+const passwordField = $<HTMLElement>("[data-password-field]");
+const passwordInput = $<HTMLInputElement>("[name=password]");
+const confirmPasswordField = $<HTMLElement>("[data-confirm-password-field]");
+const confirmPasswordInput = $<HTMLInputElement>("[name=confirmPassword]");
+const passwordHint = $<HTMLElement>("[data-password-hint]");
+const forgot = $<HTMLButtonElement>("[data-account-forgot]");
+const loginReturn = $<HTMLButtonElement>("[data-login-return]");
+const loginHelp = $<HTMLElement>("[data-login-help]");
 const submit = $<HTMLButtonElement>("[data-account-submit]");
 const message = $<HTMLElement>("[data-account-message]");
 const tabs = $<HTMLElement>("[data-account-tabs]");
 const profileActions = $<HTMLElement>("[data-profile-actions]");
 const legacyActions = $<HTMLElement>("[data-legacy-actions]");
-let cooldownTimer: number | undefined;
 
 function setMessage(value: string, error = false): void {
   message.textContent = value;
@@ -35,40 +44,72 @@ function setMode(nextMode: typeof mode): void {
   mode = nextMode;
   const isSignup = mode === "signup";
   const isProfile = mode === "profile" || mode === "complete-profile";
-  title.textContent = isSignup ? "Create your account" : isProfile ? "Your profile" : "Welcome back";
+  const isForgot = mode === "forgot-password";
+  const isRecovery = mode === "recovery";
+  const isLogin = mode === "login";
+
+  title.textContent = isSignup
+    ? "Create your account"
+    : isProfile
+      ? "Your profile"
+      : isForgot
+        ? "Reset your password"
+        : isRecovery
+          ? "Choose a new password"
+          : "Welcome back";
   intro.textContent = isSignup
-    ? "Choose the name shown on your homepage, then we’ll email you a secure sign-up link."
+    ? "Choose a display name and password. Confirm your email before signing in."
     : isProfile
       ? "Update the display name shown on your homepage."
-      : "Enter your email and we’ll send a one-time sign-in link.";
+      : isForgot
+        ? "Enter your email address and we’ll send password reset instructions."
+        : isRecovery
+          ? "Set a new password for the account authenticated by this recovery link."
+          : "Enter your email address and password.";
+
   displayField.hidden = !isSignup && !isProfile;
-  emailField.hidden = isProfile;
-  tabs.hidden = isProfile;
+  emailField.hidden = isProfile || isRecovery;
+  passwordField.hidden = isProfile || isForgot;
+  confirmPasswordField.hidden = !isSignup && !isRecovery;
+  passwordHint.hidden = !isSignup && !isRecovery;
+  forgot.hidden = !isLogin;
+  loginHelp.hidden = !isLogin;
+  loginReturn.hidden = !isForgot;
+  tabs.hidden = isProfile || isForgot || isRecovery;
   profileActions.hidden = !isProfile;
   legacyActions.hidden = !isProfile;
-  submit.textContent = isSignup ? "Email me a sign-up link" : isProfile ? "Save display name" : "Email me a login link";
+  submit.textContent = isSignup
+    ? "Create account"
+    : isProfile
+      ? "Save display name"
+      : isForgot
+        ? "Send reset instructions"
+        : isRecovery
+          ? "Update password"
+          : "Log in";
+
   displayInput.required = isSignup || isProfile;
-  emailInput.required = !isProfile;
+  emailInput.required = !isProfile && !isRecovery;
+  passwordInput.required = isSignup || isRecovery || isLogin;
+  confirmPasswordInput.required = isSignup || isRecovery;
+  passwordInput.autocomplete = isLogin ? "current-password" : "new-password";
   for (const tab of tabs.querySelectorAll<HTMLElement>("[data-mode]")) {
     tab.setAttribute("aria-pressed", String(tab.dataset.mode === mode));
   }
 }
 
-function startCooldown(): void {
-  window.clearInterval(cooldownTimer);
-  let remaining = 60;
-  submit.disabled = true;
-  submit.textContent = `Try again in ${remaining}s`;
-  cooldownTimer = window.setInterval(() => {
-    remaining -= 1;
-    if (remaining <= 0) {
-      window.clearInterval(cooldownTimer);
-      submit.disabled = false;
-      setMode(mode);
-    } else {
-      submit.textContent = `Try again in ${remaining}s`;
-    }
-  }, 1_000);
+function validateNewPassword(): void {
+  validatePasswordConfirmation(passwordInput.value, confirmPasswordInput.value);
+}
+
+function routeAuthenticated(auth: AuthSnapshot): void {
+  if (auth.phase === "profileIncomplete") {
+    mode = "complete-profile";
+    displayInput.value = auth.profile?.displayName ?? "";
+    setMode(mode);
+    return;
+  }
+  navigateTo(nextPage, true);
 }
 
 tabs.addEventListener("click", (event) => {
@@ -76,7 +117,21 @@ tabs.addEventListener("click", (event) => {
   if (!target) return;
   const selected = accountMode(target.dataset.mode ?? null);
   setMode(selected);
+  passwordInput.value = "";
+  confirmPasswordInput.value = "";
   window.history.replaceState({}, "", accountUrl(selected, nextPage));
+  setMessage("");
+});
+
+forgot.addEventListener("click", () => {
+  setMode("forgot-password");
+  window.history.replaceState({}, "", accountUrl("forgot-password", nextPage));
+  setMessage("");
+});
+
+loginReturn.addEventListener("click", () => {
+  setMode("login");
+  window.history.replaceState({}, "", accountUrl("login", nextPage));
   setMessage("");
 });
 
@@ -84,7 +139,11 @@ form.addEventListener("submit", async (event) => {
   event.preventDefault();
   if (!form.reportValidity()) return;
   submit.disabled = true;
-  setMessage(mode === "profile" || mode === "complete-profile" ? "Saving…" : "Sending…");
+  setMessage(mode === "profile" || mode === "complete-profile"
+    ? "Saving…"
+    : mode === "login"
+      ? "Logging in…"
+      : "Working…");
   try {
     if (mode === "profile" || mode === "complete-profile") {
       await authController.updateDisplayName(displayInput.value);
@@ -92,17 +151,38 @@ form.addEventListener("submit", async (event) => {
       window.setTimeout(() => navigateTo(nextPage, true), 450);
       return;
     }
-    const callback = accountUrl("callback", nextPage);
-    await authController.sendMagicLink(emailInput.value, {
-      createUser: mode === "signup",
-      displayName: displayInput.value,
-      redirectTo: callback.toString(),
-    });
-    setMessage("Check your inbox. The link can be used once and expires in one hour.");
-    startCooldown();
+    if (mode === "signup") {
+      validateNewPassword();
+      await authController.signUp(emailInput.value, passwordInput.value, {
+        displayName: displayInput.value,
+        redirectTo: accountUrl("callback", nextPage).toString(),
+      });
+      setMessage("Check your inbox to confirm your email address. If you already have an account, use Forgot password.");
+      passwordInput.value = "";
+      confirmPasswordInput.value = "";
+      return;
+    }
+    if (mode === "forgot-password") {
+      await authController.requestPasswordReset(
+        emailInput.value,
+        accountUrl("recovery", nextPage).toString(),
+      );
+      setMessage("If an account exists for that email, password reset instructions are on the way.");
+      return;
+    }
+    if (mode === "recovery") {
+      validateNewPassword();
+      const auth = await authController.updatePassword(passwordInput.value);
+      setMessage("Password updated.");
+      window.setTimeout(() => routeAuthenticated(auth), 450);
+      return;
+    }
+    const auth = await authController.signInWithPassword(emailInput.value, passwordInput.value);
+    routeAuthenticated(auth);
   } catch (error) {
-    submit.disabled = false;
     setMessage(error instanceof Error ? error.message : "The request could not be completed.", true);
+  } finally {
+    submit.disabled = false;
   }
 });
 
@@ -146,21 +226,46 @@ legacyActions.addEventListener("click", (event) => {
   }
 });
 
-setMode(mode);
-const auth = await authController.initialize();
-if (auth.phase === "signedIn" || auth.phase === "profileIncomplete") {
-  if (mode === "callback" && auth.phase === "signedIn") {
-    navigateTo(nextPage, true);
-  } else {
-    mode = auth.phase === "profileIncomplete" ? "complete-profile" : "profile";
-    displayInput.value = auth.profile?.displayName ?? "";
+function reflectAuthState(auth: AuthSnapshot): void {
+  if (auth.phase === "passwordRecovery") {
+    mode = "recovery";
     setMode(mode);
+    setMessage("");
+    return;
   }
-} else if (mode === "profile" || mode === "complete-profile") {
-  mode = "login";
-  setMode(mode);
-} else if (auth.phase === "error") {
-  setMessage(auth.message ?? "The account service is unavailable.", true);
+  if (auth.phase === "signedIn" || auth.phase === "profileIncomplete") {
+    if (mode === "callback" && auth.phase === "signedIn") {
+      navigateTo(nextPage, true);
+    } else if (mode === "recovery") {
+      mode = auth.phase === "profileIncomplete" ? "complete-profile" : "profile";
+      displayInput.value = auth.profile?.displayName ?? "";
+      setMode(mode);
+      setMessage("Use a current password reset link to choose a new password.", true);
+    } else {
+      mode = auth.phase === "profileIncomplete" ? "complete-profile" : "profile";
+      displayInput.value = auth.profile?.displayName ?? "";
+      setMode(mode);
+    }
+  } else if (
+    mode === "profile"
+    || mode === "complete-profile"
+    || mode === "callback"
+    || mode === "recovery"
+  ) {
+    const requestedRecovery = mode === "recovery";
+    mode = requestedRecovery ? "forgot-password" : "login";
+    setMode(mode);
+    if (requestedRecovery) {
+      setMessage("Use the current link from your password reset email.", true);
+    }
+  }
+  if (auth.phase === "error") {
+    setMessage(auth.message ?? "The account service is unavailable.", true);
+  }
 }
+
+setMode(mode);
+authController.onChange(reflectAuthState);
+reflectAuthState(await authController.initialize());
 
 document.body.classList.add("is-ready");

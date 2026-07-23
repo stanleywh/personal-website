@@ -17,7 +17,7 @@
     <section class="account-card" aria-labelledby="account-title">
       <p class="account-kicker">Your account</p>
       <h1 id="account-title" data-account-title>Welcome back</h1>
-      <p class="account-intro" data-account-intro>Enter your email and we’ll send a one-time sign-in link.</p>
+      <p class="account-intro" data-account-intro>Enter your email address and password.</p>
 
       <div class="account-tabs" data-account-tabs role="group" aria-label="Account action">
         <button type="button" data-mode="login" aria-pressed="true">Log in</button>
@@ -33,8 +33,24 @@
           <span>Email address</span>
           <input name="email" type="email" autocomplete="email" placeholder="you@example.com">
         </label>
+        <label class="account-field" data-password-field hidden>
+          <span>Password</span>
+          <input name="password" type="password" autocomplete="current-password">
+        </label>
+        <label class="account-field" data-confirm-password-field hidden>
+          <span>Confirm password</span>
+          <input name="confirmPassword" type="password" autocomplete="new-password">
+        </label>
+        <p class="account-password-hint" data-password-hint hidden>
+          Use at least 8 characters, including uppercase, lowercase, a number, and a symbol.
+        </p>
+        <button class="account-text-action" type="button" data-account-forgot>Forgot password?</button>
+        <p class="account-login-help" data-login-help>
+          Previously used an email login link? Use Forgot password to set a password.
+        </p>
         <p class="account-message" data-account-message aria-live="polite"></p>
-        <button class="account-submit" type="submit" data-account-submit>Email me a login link</button>
+        <button class="account-submit" type="submit" data-account-submit>Log in</button>
+        <button class="account-text-action" type="button" data-login-return hidden>Back to login</button>
       </form>
 
       <div class="account-profile-actions" data-profile-actions hidden>
