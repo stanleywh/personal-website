@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Log in to or create your Stanley personal website account.">
+  <title>Account — Stanley</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <script type="module" src="/src/account/main.ts"></script>
+</head>
+<body class="home account-page">
+  <main class="account-shell">
+    <a class="account-back" href="index.html">← Home</a>
+    <section class="account-card" aria-labelledby="account-title">
+      <p class="account-kicker">Your account</p>
+      <h1 id="account-title" data-account-title>Welcome back</h1>
+      <p class="account-intro" data-account-intro>Enter your email and we’ll send a one-time sign-in link.</p>
+
+      <div class="account-tabs" data-account-tabs role="group" aria-label="Account action">
+        <button type="button" data-mode="login" aria-pressed="true">Log in</button>
+        <button type="button" data-mode="signup" aria-pressed="false">Sign up</button>
+      </div>
+
+      <form class="account-form" data-account-form>
+        <label class="account-field" data-display-field hidden>
+          <span>Display name</span>
+          <input name="displayName" maxlength="50" autocomplete="name" placeholder="Stanley">
+        </label>
+        <label class="account-field" data-email-field>
+          <span>Email address</span>
+          <input name="email" type="email" autocomplete="email" placeholder="you@example.com">
+        </label>
+        <p class="account-message" data-account-message aria-live="polite"></p>
+        <button class="account-submit" type="submit" data-account-submit>Email me a login link</button>
+      </form>
+
+      <div class="account-profile-actions" data-profile-actions hidden>
+        <button type="button" data-account-logout>Log out</button>
+        <button class="account-danger" type="button" data-account-delete>Delete account</button>
+      </div>
+
+      <div class="account-legacy" data-legacy-actions hidden>
+        <h2>Legacy browser data</h2>
+        <p>If this device has data from the old local tracker, you can review it in the tracker or remove it.</p>
+        <div>
+          <button type="button" data-legacy-import>Review in tracker</button>
+          <button type="button" data-legacy-delete>Delete local data</button>
+        </div>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

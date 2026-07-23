@@ -19,12 +19,13 @@
 <body class="home">
   <div class="home__shell">
     <main class="home__main">
-      <section class="home__hero reveal" style="--reveal-order: 0;" aria-labelledby="page-title">
-        <h1 id="page-title">Stanley</h1>
+      <section class="home__hero reveal" style="--reveal-order: 0;" aria-labelledby="page-title" aria-busy="true">
+        <h1 id="page-title" data-home-heading>Stanley</h1>
+        <div class="home-account" data-home-account aria-live="polite"></div>
       </section>
 
       <nav class="directory" aria-label="Explore the website">
-        <a class="directory-card reveal" style="--reveal-order: 1;" href="tracker.html">
+        <a class="directory-card reveal" style="--reveal-order: 1;" href="tracker.html" data-tracker-link>
           <span class="directory-card__identity">
             <span class="directory-card__icon" aria-hidden="true">
               <svg viewBox="0 0 24 24" focusable="false">
@@ -99,6 +100,6 @@
     </footer>
   </div>
 
-  <script type="module" src="script.js"></script>
+  <script type="module" src="/src/home/main.ts"></script>
 </body>
 </html>
