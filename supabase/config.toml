@@ -1,4 +1,17 @@
 project_id = "revision-tracker"
 
+[auth]
+site_url = "https://stanleywh.github.io/personal-website/"
+additional_redirect_urls = [
+  "https://stanleywh.github.io/personal-website/account.html",
+  "http://localhost:5173/account.html",
+  "http://127.0.0.1:5173/account.html",
+  "revisiontracker://auth/callback",
+]
+
+[auth.email]
+max_frequency = "1m"
+otp_expiry = 3600
+
 [functions.delete-account]
 verify_jwt = true
