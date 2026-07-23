@@ -9,6 +9,13 @@
 * { box-sizing: border-box; }
 .tracker [hidden] { display: none !important; }
 
+.tracker-auth-guard { min-height: 100vh; display: grid; place-content: center; justify-items: center; gap: 12px; color: #7d7469; font-size: .75rem; text-align: center; }
+.tracker-auth-guard__spinner { width: 30px; height: 30px; border: 3px solid #e8e0d3; border-top-color: #78634b; border-radius: 50%; animation: tracker-spin .8s linear infinite; }
+.tracker-auth-guard a { display: none; color: #5e4a36; font-weight: 700; }
+.tracker-auth-guard[data-state="error"] .tracker-auth-guard__spinner { display: none; }
+.tracker-auth-guard[data-state="error"] a { display: inline; }
+@keyframes tracker-spin { to { transform: rotate(360deg); } }
+
 .tracker {
   --background: #eee8dc;
   --surface: #f8f4eb;

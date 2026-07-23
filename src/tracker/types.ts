@@ -88,18 +88,25 @@ export interface TrackerState {
   sessions: RevisionSession[];
 }
 
-export type EntityName = "profiles" | "labels" | "events" | "revision_items" | "revision_sessions";
+export type QueueOperation =
+  | "save_profile"
+  | "save_label"
+  | "delete_label"
+  | "save_event"
+  | "save_revision_item"
+  | "delete_revision_item"
+  | "save_session";
 
 export interface QueuedMutation {
   id: string;
-  entity: EntityName;
-  action: "upsert" | "delete";
+  ownerId: string;
+  operation: QueueOperation;
   payload: unknown;
   queuedAt: string;
 }
 
 export interface Repository {
-  readonly mode: "local" | "cloud";
+  readonly mode: "cloud";
   load(): Promise<TrackerState>;
   saveProfile(profile: Profile): Promise<void>;
   saveLabel(label: StudyLabel): Promise<void>;

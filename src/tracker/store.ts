@@ -1,9 +1,12 @@
-import { createClient, type SupabaseClient, type User } from "@supabase/supabase-js";
-import { createDemoState, createInitialState } from "./seed";
+import type { SupabaseClient, User } from "@supabase/supabase-js";
+import { isAuthorizationFailure, requireSupabase } from "../auth/client";
+import { authController, profileCacheKey, type AuthSnapshot } from "../auth/session";
+import { createInitialState } from "./seed";
 import type {
   CalendarEventRecord,
   Profile,
   QueuedMutation,
+  QueueOperation,
   Repository,
   RevisionItem,
   RevisionSession,
@@ -12,115 +15,122 @@ import type {
 } from "./types";
 import { isoNow, uid } from "./utils";
 
-const STORAGE_KEY = "revision-tracker:v2";
-const QUEUE_KEY = "revision-tracker:queue:v1";
+export const LEGACY_STATE_KEY = "revision-tracker:v2";
+export const LEGACY_QUEUE_KEY = "revision-tracker:queue:v1";
 
-function readCache(): TrackerState | undefined {
+export class TrackerAuthorizationError extends Error {
+  constructor(message = "Your session has expired. Sign in again.") {
+    super(message);
+    this.name = "TrackerAuthorizationError";
+  }
+}
+
+export function stateKey(userId: string): string {
+  return `revision-tracker:user:${userId}:state:v3`;
+}
+
+export function queueKey(userId: string): string {
+  return `revision-tracker:user:${userId}:queue:v2`;
+}
+
+export function legacyDismissedKey(userId: string): string {
+  return `revision-tracker:user:${userId}:legacy-dismissed:v1`;
+}
+
+export function legacyImportPendingKey(userId: string): string {
+  return `revision-tracker:user:${userId}:legacy-import-pending:v1`;
+}
+
+function isTrackerState(value: unknown): value is TrackerState {
+  if (!value || typeof value !== "object") return false;
+  const candidate = value as Partial<TrackerState>;
+  return Boolean(candidate.profile && typeof candidate.profile === "object")
+    && Array.isArray(candidate.labels)
+    && Array.isArray(candidate.events)
+    && Array.isArray(candidate.revisionItems)
+    && Array.isArray(candidate.sessions);
+}
+
+export function readUserCache(userId: string): TrackerState | undefined {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) as TrackerState : undefined;
+    const raw = localStorage.getItem(stateKey(userId));
+    const parsed = raw ? JSON.parse(raw) as unknown : undefined;
+    return isTrackerState(parsed) ? parsed : undefined;
   } catch {
     return undefined;
   }
 }
 
-export function cacheState(state: TrackerState): void {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+export function cacheUserState(userId: string, state: TrackerState): void {
+  localStorage.setItem(stateKey(userId), JSON.stringify(state));
 }
 
-function mutateCache(mutator: (state: TrackerState) => void): void {
-  const state = readCache() ?? createInitialState();
-  mutator(state);
-  cacheState(state);
-}
-
-function readQueue(): QueuedMutation[] {
+export function readLegacyState(): TrackerState | undefined {
   try {
-    return JSON.parse(localStorage.getItem(QUEUE_KEY) ?? "[]") as QueuedMutation[];
+    const raw = localStorage.getItem(LEGACY_STATE_KEY);
+    const parsed = raw ? JSON.parse(raw) as unknown : undefined;
+    return isTrackerState(parsed) ? parsed : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export function trackerStateIsEmpty(state: TrackerState): boolean {
+  return state.labels.length === 0
+    && state.events.length === 0
+    && state.revisionItems.length === 0
+    && state.sessions.length === 0;
+}
+
+export function legacyRecordCounts(state: TrackerState): {
+  events: number;
+  labels: number;
+  revisionItems: number;
+  sessions: number;
+} {
+  return {
+    events: state.events.length,
+    labels: state.labels.length,
+    revisionItems: state.revisionItems.length,
+    sessions: state.sessions.length,
+  };
+}
+
+export function readUserQueue(userId: string): QueuedMutation[] {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(queueKey(userId)) ?? "[]") as unknown;
+    if (!Array.isArray(parsed)) return [];
+    const allowed = new Set<QueueOperation>([
+      "save_profile",
+      "save_label",
+      "delete_label",
+      "save_event",
+      "save_revision_item",
+      "delete_revision_item",
+      "save_session",
+    ]);
+    return parsed.filter((entry): entry is QueuedMutation => {
+      if (!entry || typeof entry !== "object") return false;
+      const candidate = entry as Partial<QueuedMutation>;
+      return candidate.ownerId === userId
+        && typeof candidate.id === "string"
+        && typeof candidate.queuedAt === "string"
+        && typeof candidate.operation === "string"
+        && allowed.has(candidate.operation as QueueOperation);
+    });
   } catch {
     return [];
   }
 }
 
-function queueMutation(entity: QueuedMutation["entity"], action: QueuedMutation["action"], payload: unknown): void {
-  const queue = readQueue();
-  queue.push({ id: uid(), entity, action, payload, queuedAt: isoNow() });
-  localStorage.setItem(QUEUE_KEY, JSON.stringify(queue));
+function writeQueue(userId: string, queue: QueuedMutation[]): void {
+  localStorage.setItem(queueKey(userId), JSON.stringify(queue));
 }
 
-export function queuedMutationCount(): number {
-  return readQueue().length;
-}
-
-class LocalRepository implements Repository {
-  readonly mode = "local" as const;
-
-  async load(): Promise<TrackerState> {
-    const cached = readCache();
-    if (cached) return cached;
-    const seeded = createDemoState();
-    cacheState(seeded);
-    return seeded;
-  }
-
-  async saveProfile(profile: Profile): Promise<void> {
-    mutateCache((state) => { state.profile = profile; });
-  }
-
-  async saveLabel(label: StudyLabel): Promise<void> {
-    mutateCache((state) => {
-      const index = state.labels.findIndex((item) => item.id === label.id);
-      if (index >= 0) state.labels[index] = label;
-      else state.labels.push(label);
-    });
-  }
-
-  async deleteLabel(id: string): Promise<void> {
-    mutateCache((state) => {
-      state.labels = state.labels.filter((label) => label.id !== id);
-      for (const event of state.events) {
-        if (event.subjectId === id) event.subjectId = undefined;
-        if (event.classId === id) event.classId = undefined;
-        if (event.topicId === id) event.topicId = undefined;
-      }
-      for (const item of state.revisionItems) {
-        if (item.subjectId === id) item.subjectId = undefined;
-        if (item.classId === id) item.classId = undefined;
-        if (item.topicId === id) item.topicId = undefined;
-      }
-    });
-  }
-
-  async saveEvent(event: CalendarEventRecord): Promise<void> {
-    mutateCache((state) => {
-      const index = state.events.findIndex((item) => item.id === event.id);
-      if (index >= 0) state.events[index] = event;
-      else state.events.push(event);
-    });
-  }
-
-  async saveRevisionItem(item: RevisionItem): Promise<void> {
-    mutateCache((state) => {
-      const index = state.revisionItems.findIndex((entry) => entry.id === item.id);
-      if (index >= 0) state.revisionItems[index] = item;
-      else state.revisionItems.push(item);
-    });
-  }
-
-  async deleteRevisionItem(id: string): Promise<void> {
-    mutateCache((state) => {
-      state.revisionItems = state.revisionItems.filter((item) => item.id !== id);
-      state.sessions = state.sessions.filter((session) => session.revisionItemId !== id);
-    });
-  }
-
-  async saveSession(session: RevisionSession): Promise<void> {
-    mutateCache((state) => {
-      const index = state.sessions.findIndex((item) => item.id === session.id);
-      if (index >= 0) state.sessions[index] = session;
-      else state.sessions.push(session);
-    });
-  }
+function queueMutation(userId: string, operation: QueueOperation, payload: unknown): void {
+  const queue = readUserQueue(userId);
+  queue.push({ id: uid(), ownerId: userId, operation, payload, queuedAt: isoNow() });
+  writeQueue(userId, queue);
 }
 
 const toLabelRow = (label: StudyLabel, userId: string) => ({
@@ -188,21 +198,81 @@ const fromSessionRow = (row: Record<string, any>): RevisionSession => ({
 
 class CloudRepository implements Repository {
   readonly mode = "cloud" as const;
-  constructor(private readonly client: SupabaseClient, private readonly user: User) {}
 
-  private async execute(entity: QueuedMutation["entity"], action: QueuedMutation["action"], payload: unknown, operation: () => PromiseLike<{ error: any }>): Promise<void> {
+  constructor(
+    private readonly client: SupabaseClient,
+    private readonly user: User,
+  ) {}
+
+  private throwForFailure(result: { error: { message?: string; code?: string } | null; status?: number }): void {
+    if (!result.error) return;
+    if (isAuthorizationFailure(result.error, result.status)) {
+      throw new TrackerAuthorizationError();
+    }
+    throw new Error(result.error.message ?? "Cloud save failed.");
+  }
+
+  private async runMutation(operation: QueueOperation, payload: any): Promise<void> {
+    switch (operation) {
+      case "save_profile": {
+        this.throwForFailure(await this.client.from("profiles").upsert(payload));
+        break;
+      }
+      case "save_label": {
+        this.throwForFailure(await this.client.from("labels").upsert(payload));
+        break;
+      }
+      case "delete_label": {
+        this.throwForFailure(await this.client.from("labels").delete().eq("id", String(payload.id)));
+        break;
+      }
+      case "save_event": {
+        this.throwForFailure(await this.client.from("events").upsert(payload.event));
+        this.throwForFailure(
+          await this.client.from("event_labels").delete().eq("event_id", String(payload.event.id)),
+        );
+        if (payload.labelIds.length) {
+          this.throwForFailure(await this.client.from("event_labels").insert(
+            payload.labelIds.map((labelId: string) => ({
+              event_id: payload.event.id,
+              label_id: labelId,
+              user_id: this.user.id,
+            })),
+          ));
+        }
+        break;
+      }
+      case "save_revision_item": {
+        this.throwForFailure(await this.client.from("revision_items").upsert(payload));
+        break;
+      }
+      case "delete_revision_item": {
+        this.throwForFailure(await this.client.from("revision_items").delete().eq("id", String(payload.id)));
+        break;
+      }
+      case "save_session": {
+        this.throwForFailure(await this.client.from("revision_sessions").upsert(payload));
+        break;
+      }
+    }
+  }
+
+  private async execute(operation: QueueOperation, payload: unknown): Promise<void> {
     if (!navigator.onLine) {
-      queueMutation(entity, action, payload);
+      queueMutation(this.user.id, operation, payload);
       throw new Error("You are offline. The change is queued.");
     }
-    const { error } = await operation();
-    if (error) {
-      queueMutation(entity, action, payload);
-      throw new Error(error.message ?? "Cloud save failed. The change is queued.");
+    try {
+      await this.runMutation(operation, payload);
+    } catch (error) {
+      if (error instanceof TrackerAuthorizationError) throw error;
+      queueMutation(this.user.id, operation, payload);
+      throw error;
     }
   }
 
   async load(): Promise<TrackerState> {
+    if (!navigator.onLine) return readUserCache(this.user.id) ?? createInitialState();
     const [profileResult, labelsResult, eventsResult, revisionsResult, sessionsResult] = await Promise.all([
       this.client.from("profiles").select("*").eq("id", this.user.id).maybeSingle(),
       this.client.from("labels").select("*").order("name"),
@@ -210,8 +280,16 @@ class CloudRepository implements Repository {
       this.client.from("revision_items").select("*").order("updated_at", { ascending: false }),
       this.client.from("revision_sessions").select("*").order("revised_at", { ascending: false }),
     ]);
-    const firstError = [profileResult, labelsResult, eventsResult, revisionsResult, sessionsResult].find((result) => result.error)?.error;
-    if (firstError) throw new Error(firstError.message);
+    const failedResult = [profileResult, labelsResult, eventsResult, revisionsResult, sessionsResult]
+      .find((result) => result.error);
+    if (failedResult?.error) {
+      if (isAuthorizationFailure(failedResult.error, failedResult.status)) {
+        throw new TrackerAuthorizationError();
+      }
+      const cached = readUserCache(this.user.id);
+      if (cached) return cached;
+      throw new Error(failedResult.error.message);
+    }
     const fallback = createInitialState();
     const profileRow = profileResult.data as Record<string, any> | null;
     const state: TrackerState = {
@@ -224,136 +302,152 @@ class CloudRepository implements Repository {
       revisionItems: (revisionsResult.data ?? []).map((row) => fromRevisionRow(row)),
       sessions: (sessionsResult.data ?? []).map((row) => fromSessionRow(row)),
     };
-    cacheState(state);
+    cacheUserState(this.user.id, state);
     return state;
   }
 
   async saveProfile(profile: Profile): Promise<void> {
-    const payload = { id: this.user.id, timezone: profile.timezone, locale: profile.locale, week_start: profile.weekStart, calendar_view: profile.calendarView, onboarding_complete: profile.onboardingComplete };
-    await this.execute("profiles", "upsert", payload, () => this.client.from("profiles").upsert(payload));
-  }
-
-  async saveLabel(label: StudyLabel): Promise<void> {
-    const payload = toLabelRow(label, this.user.id);
-    await this.execute("labels", "upsert", payload, () => this.client.from("labels").upsert(payload));
-  }
-
-  async deleteLabel(id: string): Promise<void> {
-    await this.execute("labels", "delete", { id }, () => this.client.from("labels").delete().eq("id", id));
-  }
-
-  async saveEvent(event: CalendarEventRecord): Promise<void> {
-    const payload = toEventRow(event, this.user.id);
-    await this.execute("events", "upsert", payload, () => this.client.from("events").upsert(payload));
-    const labelIds = [event.subjectId, event.classId, event.topicId].filter(Boolean) as string[];
-    const { error: deleteError } = await this.client.from("event_labels").delete().eq("event_id", event.id);
-    if (deleteError) throw new Error(deleteError.message);
-    if (labelIds.length) {
-      const { error } = await this.client.from("event_labels").insert(labelIds.map((labelId) => ({ event_id: event.id, label_id: labelId, user_id: this.user.id })));
-      if (error) throw new Error(error.message);
-    }
-  }
-
-  async saveRevisionItem(item: RevisionItem): Promise<void> {
-    const payload = toRevisionRow(item, this.user.id);
-    await this.execute("revision_items", "upsert", payload, () => this.client.from("revision_items").upsert(payload));
-  }
-
-  async deleteRevisionItem(id: string): Promise<void> {
-    await this.execute("revision_items", "delete", { id }, () => this.client.from("revision_items").delete().eq("id", id));
-  }
-
-  async saveSession(session: RevisionSession): Promise<void> {
-    const payload = toSessionRow(session, this.user.id);
-    await this.execute("revision_sessions", "upsert", payload, () => this.client.from("revision_sessions").upsert(payload));
-  }
-}
-
-export interface AuthState {
-  configured: boolean;
-  user: User | null;
-}
-
-export class PersistenceController {
-  private client?: SupabaseClient;
-  private user: User | null = null;
-  private local = new LocalRepository();
-  private cloud?: CloudRepository;
-  private listeners = new Set<(state: AuthState) => void>();
-
-  constructor() {
-    const url = import.meta.env.VITE_SUPABASE_URL as string | undefined;
-    const key = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
-    if (url && key && !url.includes("your-project")) this.client = createClient(url, key);
-  }
-
-  async initialize(): Promise<void> {
-    if (!this.client) return;
-    const { data } = await this.client.auth.getSession();
-    this.setUser(data.session?.user ?? null);
-    this.client.auth.onAuthStateChange((_event, session) => {
-      this.setUser(session?.user ?? null);
+    await this.execute("save_profile", {
+      id: this.user.id,
+      timezone: profile.timezone,
+      locale: profile.locale,
+      week_start: profile.weekStart,
+      calendar_view: profile.calendarView,
+      onboarding_complete: profile.onboardingComplete,
     });
   }
 
-  private setUser(user: User | null): void {
-    this.user = user;
-    this.cloud = user && this.client ? new CloudRepository(this.client, user) : undefined;
-    const state = this.authState;
-    this.listeners.forEach((listener) => listener(state));
+  async saveLabel(label: StudyLabel): Promise<void> {
+    await this.execute("save_label", toLabelRow(label, this.user.id));
   }
 
-  get authState(): AuthState {
-    return { configured: Boolean(this.client), user: this.user };
+  async deleteLabel(id: string): Promise<void> {
+    await this.execute("delete_label", { id });
   }
 
-  get repository(): Repository {
-    return this.cloud ?? this.local;
+  async saveEvent(event: CalendarEventRecord): Promise<void> {
+    await this.execute("save_event", {
+      event: toEventRow(event, this.user.id),
+      labelIds: [event.subjectId, event.classId, event.topicId].filter(Boolean),
+    });
   }
 
-  onAuthChange(listener: (state: AuthState) => void): () => void {
-    this.listeners.add(listener);
-    return () => this.listeners.delete(listener);
+  async saveRevisionItem(item: RevisionItem): Promise<void> {
+    await this.execute("save_revision_item", toRevisionRow(item, this.user.id));
   }
 
-  async sendMagicLink(email: string): Promise<void> {
-    if (!this.client) throw new Error("Cloud sync is not configured yet. Add the Supabase environment variables first.");
-    const { error } = await this.client.auth.signInWithOtp({ email, options: { emailRedirectTo: window.location.href.split("#")[0] } });
-    if (error) throw new Error(error.message);
+  async deleteRevisionItem(id: string): Promise<void> {
+    await this.execute("delete_revision_item", { id });
   }
 
-  async signOut(): Promise<void> {
-    if (this.client) await this.client.auth.signOut();
-  }
-
-  async deleteAccount(): Promise<void> {
-    if (!this.client || !this.user) return;
-    const { error } = await this.client.functions.invoke("delete-account", { method: "POST" });
-    if (error) throw new Error(error.message);
-    await this.signOut();
-    localStorage.removeItem(STORAGE_KEY);
+  async saveSession(session: RevisionSession): Promise<void> {
+    await this.execute("save_session", toSessionRow(session, this.user.id));
   }
 
   async flushQueue(): Promise<number> {
-    if (!this.client || !this.user || !navigator.onLine) return queuedMutationCount();
-    const queue = readQueue();
+    if (!navigator.onLine) return readUserQueue(this.user.id).length;
     const failed: QueuedMutation[] = [];
-    for (const mutation of queue) {
+    for (const mutation of readUserQueue(this.user.id)) {
       try {
-        const table = mutation.entity;
-        if (mutation.action === "delete") {
-          const id = (mutation.payload as { id: string }).id;
-          const { error } = await this.client.from(table).delete().eq("id", id);
-          if (error) throw error;
-        } else {
-          const { error } = await this.client.from(table).upsert(mutation.payload as Record<string, unknown>);
-          if (error) throw error;
-        }
-      } catch {
+        await this.runMutation(mutation.operation, mutation.payload);
+      } catch (error) {
+        if (error instanceof TrackerAuthorizationError) throw error;
         failed.push(mutation);
       }
     }
-    localStorage.setItem(QUEUE_KEY, JSON.stringify(failed));
+    writeQueue(this.user.id, failed);
     return failed.length;
+  }
+}
+
+export class PersistenceController {
+  private user?: User;
+  private cloud?: CloudRepository;
+
+  async initialize(): Promise<void> {
+    const auth = await authController.initialize();
+    if (auth.phase !== "signedIn" || !auth.user) throw new Error("Sign in before opening the Revision Tracker.");
+    this.user = auth.user;
+    this.cloud = new CloudRepository(requireSupabase(), auth.user);
+  }
+
+  get userId(): string {
+    if (!this.user) throw new Error("No authenticated user.");
+    return this.user.id;
+  }
+
+  get authState(): AuthSnapshot {
+    return authController.state;
+  }
+
+  get repository(): Repository {
+    if (!this.cloud) throw new Error("Tracker persistence is not initialized.");
+    return this.cloud;
+  }
+
+  cacheState(state: TrackerState): void {
+    cacheUserState(this.userId, state);
+  }
+
+  queuedMutationCount(): number {
+    return readUserQueue(this.userId).length;
+  }
+
+  onAuthChange(listener: (state: AuthSnapshot) => void): () => void {
+    return authController.onChange(listener);
+  }
+
+  async signOut(): Promise<void> {
+    await authController.signOut();
+  }
+
+  async deleteAccount(): Promise<void> {
+    const userId = this.userId;
+    await authController.deleteAccount();
+    localStorage.removeItem(stateKey(userId));
+    localStorage.removeItem(queueKey(userId));
+    localStorage.removeItem(profileCacheKey(userId));
+    localStorage.removeItem(legacyDismissedKey(userId));
+    localStorage.removeItem(legacyImportPendingKey(userId));
+  }
+
+  async flushQueue(): Promise<number> {
+    return this.cloud?.flushQueue() ?? 0;
+  }
+
+  legacyState(): TrackerState | undefined {
+    if (localStorage.getItem(legacyDismissedKey(this.userId))) return undefined;
+    return readLegacyState();
+  }
+
+  dismissLegacy(): void {
+    localStorage.setItem(legacyDismissedKey(this.userId), "kept");
+    localStorage.removeItem(legacyImportPendingKey(this.userId));
+  }
+
+  discardLegacy(): void {
+    localStorage.removeItem(LEGACY_STATE_KEY);
+    localStorage.removeItem(LEGACY_QUEUE_KEY);
+    localStorage.removeItem(legacyImportPendingKey(this.userId));
+    localStorage.setItem(legacyDismissedKey(this.userId), "discarded");
+  }
+
+  legacyImportPending(): boolean {
+    return localStorage.getItem(legacyImportPendingKey(this.userId)) === "pending";
+  }
+
+  async importLegacy(state: TrackerState): Promise<void> {
+    if (!this.cloud) throw new Error("Tracker persistence is not initialized.");
+    localStorage.setItem(legacyImportPendingKey(this.userId), "pending");
+    await this.cloud.saveProfile(state.profile);
+    for (const label of state.labels) await this.cloud.saveLabel(label);
+    for (const event of state.events) await this.cloud.saveEvent(event);
+    for (const item of state.revisionItems) await this.cloud.saveRevisionItem(item);
+    for (const session of state.sessions) await this.cloud.saveSession(session);
+    cacheUserState(this.userId, state);
+    localStorage.removeItem(LEGACY_STATE_KEY);
+    localStorage.removeItem(LEGACY_QUEUE_KEY);
+    localStorage.removeItem(legacyImportPendingKey(this.userId));
+    localStorage.setItem(legacyDismissedKey(this.userId), "imported");
   }
 }

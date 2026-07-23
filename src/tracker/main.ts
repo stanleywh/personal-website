@@ -5,8 +5,14 @@ import luxonPlugin from "@fullcalendar/luxon3";
 import rrulePlugin from "@fullcalendar/rrule";
 import timeGridPlugin from "@fullcalendar/timegrid";
 import { DateTime } from "luxon";
+import { accountUrl, navigateTo } from "../auth/navigation";
 import "./tracker.css";
-import { cacheState, PersistenceController, queuedMutationCount } from "./store";
+import {
+  legacyRecordCounts,
+  PersistenceController,
+  TrackerAuthorizationError,
+  trackerStateIsEmpty,
+} from "./store";
 import type { CalendarEventRecord, LabelKind, Profile, RevisionItem, RevisionSession, StudyLabel } from "./types";
 import {
   downloadText,
@@ -36,12 +42,14 @@ const $$ = <T extends Element>(selector: string, root: ParentNode = document): T
 
 const persistence = new PersistenceController();
 await persistence.initialize();
+if (navigator.onLine) await persistence.flushQueue();
 let repository = persistence.repository;
 let state = await repository.load();
 let selectedDate = DateTime.now().setZone(state.profile.timezone).startOf("day").toJSDate();
 let calendar: Calendar;
 let statusTimer: number | undefined;
 let activeEventId: string | undefined;
+let sessionFailure = false;
 
 const TIME_GRID_HEIGHT = "clamp(560px, 72vh, 720px)";
 const WEEKDAY_CODES = ["MO", "TU", "WE", "TH", "FR", "SA", "SU"] as const;
@@ -56,9 +64,9 @@ const revisionForm = $<HTMLFormElement>("[data-revision-form]");
 const sessionDialog = $<HTMLDialogElement>("[data-session-dialog]");
 const sessionForm = $<HTMLFormElement>("[data-session-form]");
 const labelDialog = $<HTMLDialogElement>("[data-label-dialog]");
-const authDialog = $<HTMLDialogElement>("[data-auth-dialog]");
 const settingsDialog = $<HTMLDialogElement>("[data-settings-dialog]");
 const privacyDialog = $<HTMLDialogElement>("[data-privacy-dialog]");
+const legacyDialog = $<HTMLDialogElement>("[data-legacy-dialog]");
 
 function setStatus(kind: "saved" | "saving" | "offline" | "error", message?: string): void {
   window.clearTimeout(statusTimer);
@@ -66,7 +74,7 @@ function setStatus(kind: "saved" | "saving" | "offline" | "error", message?: str
   const defaults = {
     saved: repository.mode === "cloud" ? "Synced to your account" : "Saved on this device",
     saving: "Saving…",
-    offline: `Offline · ${queuedMutationCount()} change${queuedMutationCount() === 1 ? "" : "s"} queued`,
+    offline: `Offline · ${persistence.queuedMutationCount()} change${persistence.queuedMutationCount() === 1 ? "" : "s"} queued`,
     error: "Couldn’t sync this change",
   };
   statusText.textContent = message ?? defaults[kind];
@@ -83,14 +91,27 @@ function toast(message: string, tone: "default" | "error" = "default"): void {
   window.setTimeout(() => item.remove(), 4_500);
 }
 
+async function failClosedIfUnauthorized(error: unknown): Promise<boolean> {
+  if (!(error instanceof TrackerAuthorizationError)) return false;
+  sessionFailure = true;
+  $<HTMLElement>("[data-tracker-shell]").hidden = true;
+  try {
+    await persistence.signOut();
+  } finally {
+    window.location.replace(accountUrl("login", "tracker.html"));
+  }
+  return true;
+}
+
 async function persist(task: () => Promise<void>, success?: string): Promise<void> {
-  cacheState(state);
+  persistence.cacheState(state);
   setStatus(navigator.onLine ? "saving" : "offline");
   try {
     await task();
     setStatus(navigator.onLine ? "saved" : "offline");
     if (success) toast(success);
   } catch (error) {
+    if (await failClosedIfUnauthorized(error)) return;
     const message = error instanceof Error ? error.message : "The change could not be saved.";
     setStatus(navigator.onLine ? "error" : "offline", message);
     toast(message, "error");
@@ -513,12 +534,63 @@ function exportEvents(events: CalendarEventRecord[], filename: string): void {
 function renderAccount(): void {
   const auth = persistence.authState;
   const button = $<HTMLButtonElement>("[data-auth-button]");
-  button.textContent = auth.user ? auth.user.email ?? "Account" : auth.configured ? "Cloud sign in" : "Local mode";
+  button.textContent = auth.profile?.displayName ?? "Profile";
   const account = $<HTMLElement>("[data-settings-account]");
   if (auth.user) {
-    account.innerHTML = `<div><span>Signed in as</span><strong>${escapeHtml(auth.user.email ?? "Your account")}</strong></div><div class="settings-account__actions"><button class="button button--quiet" type="button" data-sign-out>Sign out</button><button class="button button--danger" type="button" data-delete-account>Delete account</button></div>`;
+    account.innerHTML = `<div><span>Signed in as</span><strong>${escapeHtml(auth.profile?.displayName ?? auth.user.email ?? "Your account")}</strong></div><div class="settings-account__actions"><a class="button button--quiet" href="${accountUrl("profile", "tracker.html")}">Edit profile</a><button class="button button--quiet" type="button" data-sign-out>Sign out</button><button class="button button--danger" type="button" data-delete-account>Delete account</button></div>`;
   } else {
-    account.innerHTML = `<p>${auth.configured ? "Sign in to sync this tracker across devices." : "Cloud sync is not configured. Your data is safely stored in this browser."}</p>`;
+    account.innerHTML = "<p>Your session has ended. Sign in again to continue.</p>";
+  }
+}
+
+async function flushQueuedChanges(): Promise<void> {
+  try {
+    const remaining = await persistence.flushQueue();
+    setStatus(remaining ? "error" : "saved");
+    if (!remaining) toast("Queued changes synced");
+  } catch (error) {
+    if (await failClosedIfUnauthorized(error)) return;
+    setStatus("error", error instanceof Error ? error.message : "Queued changes could not be synced.");
+  }
+}
+
+function cloudTrackerIsEmpty(): boolean {
+  return trackerStateIsEmpty(state);
+}
+
+function openLegacyImportIfEligible(): void {
+  const legacy = persistence.legacyState();
+  if (!legacy || (!cloudTrackerIsEmpty() && !persistence.legacyImportPending())) return;
+  const counts = legacyRecordCounts(legacy);
+  $<HTMLElement>("[data-legacy-summary]").textContent =
+    `${counts.events} event${counts.events === 1 ? "" : "s"}, `
+    + `${counts.labels} label${counts.labels === 1 ? "" : "s"}, `
+    + `${counts.revisionItems} revision item${counts.revisionItems === 1 ? "" : "s"}, and `
+    + `${counts.sessions} session${counts.sessions === 1 ? "" : "s"} are stored on this device.`;
+  legacyDialog.showModal();
+}
+
+async function importLegacyData(): Promise<void> {
+  const legacy = persistence.legacyState();
+  if (!legacy || (!cloudTrackerIsEmpty() && !persistence.legacyImportPending())) {
+    legacyDialog.close();
+    return;
+  }
+  const message = $<HTMLElement>("[data-legacy-message]");
+  message.textContent = "Importing…";
+  try {
+    await persistence.importLegacy(legacy);
+    state = legacy;
+    selectedDate = DateTime.now().setZone(state.profile.timezone).startOf("day").toJSDate();
+    calendar.setOption("timeZone", state.profile.timezone);
+    calendar.setOption("firstDay", state.profile.weekStart);
+    fillLabelSelects();
+    refreshCalendar();
+    renderRevisionTable();
+    legacyDialog.close();
+    toast("Local tracker data imported");
+  } catch (error) {
+    message.textContent = error instanceof Error ? error.message : "The import could not be completed.";
   }
 }
 
@@ -540,19 +612,6 @@ async function saveSettings(): Promise<void> {
   calendar.setOption("timeZone", state.profile.timezone);
   calendar.setOption("firstDay", state.profile.weekStart);
   await persist(() => repository.saveProfile(state.profile), "Preferences saved");
-}
-
-async function reloadForAccount(): Promise<void> {
-  repository = persistence.repository;
-  try {
-    state = await repository.load();
-    selectedDate = DateTime.now().setZone(state.profile.timezone).startOf("day").toJSDate();
-    calendar.setOption("timeZone", state.profile.timezone);
-    calendar.setOption("firstDay", state.profile.weekStart);
-    fillLabelSelects(); refreshCalendar(); renderRevisionTable(); renderAccount(); setStatus("saved");
-  } catch (error) {
-    toast(error instanceof Error ? error.message : "Could not load cloud data.", "error");
-  }
 }
 
 function initializeCalendar(): void {
@@ -629,18 +688,7 @@ function initializeInteractions(): void {
     if (save) void saveLabel(save.dataset.saveLabel!);
     if (remove) void deleteLabel(remove.dataset.deleteLabel!);
   });
-  $("[data-auth-button]").addEventListener("click", () => persistence.authState.user ? openSettings() : authDialog.showModal());
-  $("[data-send-magic-link]").addEventListener("click", async (event) => {
-    event.preventDefault();
-    const form = $<HTMLFormElement>("[data-auth-form]");
-    if (!form.reportValidity()) return;
-    const message = $<HTMLElement>("[data-auth-message]");
-    message.textContent = "Sending…";
-    try {
-      await persistence.sendMagicLink(String(new FormData(form).get("email")));
-      message.textContent = "Check your inbox for the secure sign-in link.";
-    } catch (error) { message.textContent = error instanceof Error ? error.message : "Could not send the link."; }
-  });
+  $("[data-auth-button]").addEventListener("click", openSettings);
   $("[data-settings-account]").addEventListener("click", async (event) => {
     const target = event.target as HTMLElement;
     if (target.closest("[data-sign-out]")) { settingsDialog.close(); await persistence.signOut(); }
@@ -648,8 +696,20 @@ function initializeInteractions(): void {
       try { await persistence.deleteAccount(); settingsDialog.close(); toast("Account deleted"); } catch (error) { toast(error instanceof Error ? error.message : "Account deletion failed.", "error"); }
     }
   });
-  retryButton.addEventListener("click", async () => { const remaining = await persistence.flushQueue(); setStatus(remaining ? "error" : "saved"); if (!remaining) toast("Queued changes synced"); });
-  window.addEventListener("online", async () => { const remaining = await persistence.flushQueue(); setStatus(remaining ? "error" : "saved"); });
+  $("[data-legacy-import]").addEventListener("click", () => void importLegacyData());
+  $("[data-legacy-keep]").addEventListener("click", () => {
+    persistence.dismissLegacy();
+    legacyDialog.close();
+    toast("Legacy data kept separately on this device");
+  });
+  $("[data-legacy-discard]").addEventListener("click", () => {
+    if (!window.confirm("Permanently discard the old local tracker data from this device?")) return;
+    persistence.discardLegacy();
+    legacyDialog.close();
+    toast("Legacy browser data discarded");
+  });
+  retryButton.addEventListener("click", () => void flushQueuedChanges());
+  window.addEventListener("online", () => void flushQueuedChanges());
   window.addEventListener("offline", () => setStatus("offline"));
   document.addEventListener("visibilitychange", () => { if (!document.hidden) { calendar.setOption("now", DateTime.now().setZone(state.profile.timezone).toISO() ?? new Date()); calendar.render(); } });
 }
@@ -671,6 +731,27 @@ renderAccount();
 initializeInteractions();
 scheduleTodayRefresh();
 setStatus(navigator.onLine ? "saved" : "offline");
-persistence.onAuthChange(() => void reloadForAccount());
+persistence.onAuthChange((auth) => {
+  if (auth.phase === "signedOut") {
+    $<HTMLElement>("[data-tracker-shell]").hidden = true;
+    if (sessionFailure) window.location.replace(accountUrl("login", "tracker.html"));
+    else navigateTo("index.html", true);
+  }
+  if (
+    auth.phase === "error"
+    || auth.phase === "profileIncomplete"
+    || (auth.phase === "signedIn" && auth.user?.id !== persistence.userId)
+  ) {
+    $<HTMLElement>("[data-tracker-shell]").hidden = true;
+    if (auth.phase === "profileIncomplete") {
+      window.location.replace(accountUrl("complete-profile", "tracker.html"));
+    } else {
+      navigateTo("index.html", true);
+    }
+  }
+});
 
+$<HTMLElement>("[data-tracker-guard]").hidden = true;
+$<HTMLElement>("[data-tracker-shell]").hidden = false;
+openLegacyImportIfEligible();
 requestAnimationFrame(() => requestAnimationFrame(() => document.body.classList.add("is-ready")));
