@@ -5,7 +5,6 @@ import Foundation
 final class EventKitBridge: ObservableObject {
     static let calendarTitle = "Revision Tracker"
     private let store = EKEventStore()
-    private let calendarKey = "revisionTrackerCalendarIdentifier"
 
     @Published private(set) var permission: CalendarPermissionState = .notDetermined
 
@@ -26,12 +25,9 @@ final class EventKitBridge: ObservableObject {
         return granted
     }
 
-    func dedicatedCalendar() throws -> EKCalendar {
+    func dedicatedCalendar(for userId: String) throws -> EKCalendar {
+        let calendarKey = "revisionTrackerCalendarIdentifier.\(userId)"
         if let identifier = UserDefaults.standard.string(forKey: calendarKey), let calendar = store.calendar(withIdentifier: identifier) { return calendar }
-        if let existing = store.calendars(for: .event).first(where: { $0.title == Self.calendarTitle }) {
-            UserDefaults.standard.set(existing.calendarIdentifier, forKey: calendarKey)
-            return existing
-        }
         guard let source = store.defaultCalendarForNewEvents?.source ?? store.sources.first(where: { $0.sourceType == .calDAV || $0.sourceType == .local }) else {
             throw NSError(domain: "EventKitBridge", code: 1, userInfo: [NSLocalizedDescriptionKey: "No writable calendar account is available."])
         }

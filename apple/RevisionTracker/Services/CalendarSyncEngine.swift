@@ -39,11 +39,12 @@ final class CalendarSyncEngine: ObservableObject {
 
     func sync() async {
         guard auth.isSignedIn else { state = .failed("Sign in to sync"); return }
+        guard let userId = auth.userId else { state = .failed("Your account session is invalid"); return }
         guard bridge.permission == .authorized else { state = .failed("Enable calendar access"); return }
         guard state != .syncing else { return }
         state = .syncing
         do {
-            let calendar = try bridge.dedicatedCalendar()
+            let calendar = try bridge.dedicatedCalendar(for: userId)
             async let remoteRequest = api.fetchEvents()
             async let mappingRequest = api.fetchMappings(deviceId: deviceId)
             let (remoteEvents, mappings) = try await (remoteRequest, mappingRequest)

@@ -10,6 +10,6 @@
   <key>CFBundleVersion</key><string>$(CURRENT_PROJECT_VERSION)</string>
   <key>NSCalendarsFullAccessUsageDescription</key><string>Revision Tracker synchronizes only the dedicated Revision Tracker calendar with your private study plan.</string>
   <key>SUPABASE_URL</key><string>https://YOUR_PROJECT.supabase.co</string>
-  <key>SUPABASE_ANON_KEY</key><string>YOUR_PUBLIC_ANON_KEY</string>
+  <key>SUPABASE_PUBLISHABLE_KEY</key><string>YOUR_PUBLIC_KEY</string>
   <key>CFBundleURLTypes</key><array><dict><key>CFBundleURLSchemes</key><array><string>revisiontracker</string></array></dict></array>
 </dict></plist>

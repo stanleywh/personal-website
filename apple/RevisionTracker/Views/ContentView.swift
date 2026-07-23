@@ -6,6 +6,8 @@ struct ContentView: View {
     @EnvironmentObject private var sync: CalendarSyncEngine
     @Environment(\.scenePhase) private var scenePhase
     @State private var email = ""
+    @State private var displayName = ""
+    @State private var isSignup = false
 
     private let cream = Color(red: 0.933, green: 0.910, blue: 0.863)
     private let ink = Color(red: 0.184, green: 0.165, blue: 0.141)
@@ -18,7 +20,13 @@ struct ContentView: View {
                 ScrollView {
                     VStack(spacing: 18) {
                         header
-                        if auth.isSignedIn { calendarCard } else { signInCard }
+                        if auth.isLoading {
+                            ProgressView("Checking your account…").padding(30)
+                        } else if auth.isSignedIn {
+                            calendarCard
+                        } else {
+                            signInCard
+                        }
                         privacyCard
                     }
                     .padding(22)
@@ -49,13 +57,24 @@ struct ContentView: View {
         card {
             Label("Connect your tracker", systemImage: "icloud").font(.title3.weight(.semibold))
             Text("Use the same email as the web tracker. We’ll send a passwordless sign-in link.").font(.subheadline).foregroundStyle(.secondary)
+            Picker("Account action", selection: $isSignup) {
+                Text("Log in").tag(false)
+                Text("Sign up").tag(true)
+            }
+            .pickerStyle(.segmented)
+            if isSignup {
+                TextField("Display name", text: $displayName).textContentType(.name)
+                    .padding(12).background(.white.opacity(0.55), in: RoundedRectangle(cornerRadius: 12))
+            }
             TextField("Email address", text: $email).textContentType(.emailAddress)
                 #if os(iOS)
                 .textInputAutocapitalization(.never).keyboardType(.emailAddress)
                 #endif
                 .padding(12).background(.white.opacity(0.55), in: RoundedRectangle(cornerRadius: 12))
-            Button("Email me a sign-in link") { Task { await auth.sendMagicLink(to: email) } }
-                .buttonStyle(PrimaryButtonStyle(color: ink)).disabled(email.isEmpty)
+            Button(isSignup ? "Email me a sign-up link" : "Email me a login link") {
+                Task { await auth.sendMagicLink(to: email, createUser: isSignup, displayName: displayName) }
+            }
+                .buttonStyle(PrimaryButtonStyle(color: ink)).disabled(email.isEmpty || (isSignup && displayName.isEmpty))
             if let message = auth.message { Text(message).font(.caption).foregroundStyle(.secondary) }
         }
     }
@@ -79,14 +98,14 @@ struct ContentView: View {
                 Button { Task { if (try? await bridge.requestAccess()) == true { await sync.sync() } } } label: { Label("Enable Apple Calendar", systemImage: "calendar.badge.plus") }
                     .buttonStyle(PrimaryButtonStyle(color: ink))
             }
-            Button("Sign out", role: .destructive) { auth.signOut() }.font(.footnote.weight(.semibold))
+            Button("Sign out", role: .destructive) { Task { await auth.signOut() } }.font(.footnote.weight(.semibold))
         }
     }
 
     private var privacyCard: some View {
         card {
             Label("Private by design", systemImage: "hand.raised").font(.headline)
-            Text("This app creates or uses one dedicated Revision Tracker calendar. It never synchronizes events from your personal, work, birthday, or subscribed calendars.")
+            Text("This app creates one dedicated Revision Tracker calendar per signed-in account. It never synchronizes events from your personal, work, birthday, or subscribed calendars.")
                 .font(.caption).foregroundStyle(.secondary).lineSpacing(3)
         }
     }

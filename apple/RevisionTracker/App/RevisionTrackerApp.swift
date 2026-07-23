@@ -22,6 +22,7 @@ struct RevisionTrackerApp: App {
                 .environmentObject(sync)
                 .onOpenURL { auth.handleCallback($0) }
                 .task {
+                    await auth.bootstrap()
                     sync.startListening()
                     if auth.isSignedIn && bridge.permission == .authorized { await sync.sync() }
                 }

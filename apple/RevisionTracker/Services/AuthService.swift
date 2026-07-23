@@ -2,6 +2,7 @@ import Foundation
 
 @MainActor
 final class AuthService: ObservableObject {
+    @Published private(set) var isLoading = true
     @Published private(set) var isSignedIn = false
     @Published private(set) var email: String?
     @Published var message: String?
@@ -14,11 +15,13 @@ final class AuthService: ObservableObject {
     init() {
         let url = Bundle.main.object(forInfoDictionaryKey: "SUPABASE_URL") as? String ?? "https://YOUR_PROJECT.supabase.co"
         baseURL = URL(string: url)!
-        anonKey = Bundle.main.object(forInfoDictionaryKey: "SUPABASE_ANON_KEY") as? String ?? "YOUR_PUBLIC_ANON_KEY"
+        anonKey = Bundle.main.object(forInfoDictionaryKey: "SUPABASE_PUBLISHABLE_KEY") as? String
+            ?? Bundle.main.object(forInfoDictionaryKey: "SUPABASE_ANON_KEY") as? String
+            ?? "YOUR_PUBLIC_KEY"
         accessToken = KeychainStore.get("accessToken")
         refreshToken = KeychainStore.get("refreshToken")
         email = KeychainStore.get("email")
-        isSignedIn = accessToken != nil
+        isSignedIn = false
     }
 
     var isConfigured: Bool { !baseURL.absoluteString.contains("YOUR_PROJECT") && !anonKey.contains("YOUR_PUBLIC") }
@@ -33,8 +36,33 @@ final class AuthService: ObservableObject {
         return payload["sub"] as? String
     }
 
-    func sendMagicLink(to email: String) async {
-        guard isConfigured else { message = "Add SUPABASE_URL and SUPABASE_ANON_KEY to the target Info settings first."; return }
+    func bootstrap() async {
+        guard accessToken != nil else {
+            isLoading = false
+            return
+        }
+        do {
+            let token = try await validAccessToken()
+            var request = URLRequest(url: baseURL.appending(path: "auth/v1/user"))
+            request.setValue(anonKey, forHTTPHeaderField: "apikey")
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            let (_, response) = try await URLSession.shared.data(for: request)
+            guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw URLError(.userAuthenticationRequired) }
+            isSignedIn = true
+        } catch {
+            clearLocalSession()
+            message = "Your session expired. Request a new sign-in link."
+        }
+        isLoading = false
+    }
+
+    func sendMagicLink(to email: String, createUser: Bool, displayName: String? = nil) async {
+        guard isConfigured else { message = "Add SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY to the target Info settings first."; return }
+        let trimmedName = displayName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if createUser && !(1...50).contains(trimmedName.count) {
+            message = "Choose a display name between 1 and 50 characters."
+            return
+        }
         do {
             var components = URLComponents(url: baseURL.appending(path: "auth/v1/otp"), resolvingAgainstBaseURL: false)!
             components.queryItems = [URLQueryItem(name: "redirect_to", value: "revisiontracker://auth/callback")]
@@ -42,7 +70,15 @@ final class AuthService: ObservableObject {
             request.httpMethod = "POST"
             request.setValue(anonKey, forHTTPHeaderField: "apikey")
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            request.httpBody = try JSONSerialization.data(withJSONObject: ["email": email, "create_user": true])
+            var body: [String: Any] = ["email": email, "create_user": createUser]
+            if createUser {
+                body["data"] = [
+                    "display_name": trimmedName,
+                    "timezone": TimeZone.current.identifier,
+                    "locale": Locale.current.identifier
+                ]
+            }
+            request.httpBody = try JSONSerialization.data(withJSONObject: body)
             let (_, response) = try await URLSession.shared.data(for: request)
             guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw URLError(.badServerResponse) }
             self.email = email
@@ -66,6 +102,7 @@ final class AuthService: ObservableObject {
             accessToken = access
             refreshToken = refresh
             isSignedIn = true
+            isLoading = false
             message = nil
         } catch {
             message = "The secure session could not be stored."
@@ -108,7 +145,20 @@ final class AuthService: ObservableObject {
         return access
     }
 
-    func signOut() {
+    func signOut() async {
+        if let accessToken {
+            var components = URLComponents(url: baseURL.appending(path: "auth/v1/logout"), resolvingAgainstBaseURL: false)!
+            components.queryItems = [URLQueryItem(name: "scope", value: "local")]
+            var request = URLRequest(url: components.url!)
+            request.httpMethod = "POST"
+            request.setValue(anonKey, forHTTPHeaderField: "apikey")
+            request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+            _ = try? await URLSession.shared.data(for: request)
+        }
+        clearLocalSession()
+    }
+
+    private func clearLocalSession() {
         KeychainStore.removeAll()
         accessToken = nil
         refreshToken = nil
