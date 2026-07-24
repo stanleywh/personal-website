@@ -63,7 +63,7 @@ let eventLastValidDurationMs = 60 * 60_000;
 let revisionRating: StarRatingController | undefined;
 let sessionRating: StarRatingController | undefined;
 
-const TIME_GRID_HEIGHT = "clamp(560px, 72vh, 720px)";
+const TIME_GRID_HEIGHT = "clamp(560px, var(--app-calendar-fluid-height, 72vh), 720px)";
 const WEEKDAY_CODES = ["MO", "TU", "WE", "TH", "FR", "SA", "SU"] as const;
 
 const statusText = $<HTMLElement>("[data-status-text]");
