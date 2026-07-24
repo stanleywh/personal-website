@@ -51,21 +51,62 @@
         <p class="account-message" data-account-message aria-live="polite"></p>
         <button class="account-submit" type="submit" data-account-submit>Log in</button>
         <button class="account-text-action" type="button" data-login-return hidden>Back to login</button>
+        <a class="account-text-action" href="account.html?mode=forgot-password" data-recovery-retry hidden>Request a new reset link</a>
       </form>
 
-      <div class="account-profile-actions" data-profile-actions hidden>
-        <button type="button" data-account-logout>Log out</button>
-        <button class="account-danger" type="button" data-account-delete>Delete account</button>
-      </div>
+      <section class="account-settings" data-profile-settings hidden aria-label="Profile settings">
+        <form class="account-settings__section" data-display-name-form>
+          <div>
+            <h2>Change display name</h2>
+            <p>Update the name shown on your homepage and tracker.</p>
+          </div>
+          <label class="account-field">
+            <span>Display name</span>
+            <input name="profileDisplayName" maxlength="50" autocomplete="name" required placeholder="Stanley">
+          </label>
+          <p class="account-message" data-display-name-message aria-live="polite"></p>
+          <button class="account-submit" type="submit" data-save-display-name>Save display name</button>
+        </form>
 
-      <div class="account-legacy" data-legacy-actions hidden>
-        <h2>Legacy browser data</h2>
-        <p>If this device has data from the old local tracker, you can review it in the tracker or remove it.</p>
-        <div>
-          <button type="button" data-legacy-import>Review in tracker</button>
-          <button type="button" data-legacy-delete>Delete local data</button>
+        <form class="account-settings__section" data-change-password-form>
+          <div>
+            <h2>Change password</h2>
+            <p>Use at least 8 characters, including uppercase, lowercase, a number, and a symbol.</p>
+          </div>
+          <label class="account-field">
+            <span>New password</span>
+            <input name="settingsPassword" type="password" autocomplete="new-password" required>
+          </label>
+          <label class="account-field">
+            <span>Confirm new password</span>
+            <input name="settingsConfirmPassword" type="password" autocomplete="new-password" required>
+          </label>
+          <p class="account-message" data-change-password-message aria-live="polite"></p>
+          <button class="account-submit" type="submit" data-change-password>Change password</button>
+        </form>
+
+        <div class="account-settings__section account-settings__section--quiet">
+          <h2>Account actions</h2>
+          <div class="account-profile-actions" data-profile-actions>
+            <button type="button" data-account-logout>Log out</button>
+            <button class="account-danger" type="button" data-account-delete>Delete account</button>
+          </div>
         </div>
-      </div>
+
+        <div class="account-legacy account-settings__section account-settings__section--quiet" data-legacy-actions>
+          <h2>Legacy browser data</h2>
+          <p>If this device has data from the old local tracker, you can review it in the tracker or remove it.</p>
+          <div>
+            <button type="button" data-legacy-import>Review in tracker</button>
+            <button type="button" data-legacy-delete>Delete local data</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="account-recovery-success" data-recovery-success hidden aria-live="polite">
+        <p>Your password has been updated and this recovery session has been signed out.</p>
+        <a class="account-submit" href="account.html?mode=login" data-recovery-login>Return to login</a>
+      </section>
     </section>
   </main>
 </body>

@@ -49,7 +49,7 @@ npm.cmd run build
 
 Every user-owned table has row-level security. Events use soft-deletion tombstones; schedule `private.purge_expired_event_tombstones()` daily with Supabase Cron as the function-owning database role for the 30-day recovery policy.
 
-The web app uses email-and-password authentication. Sign-up requires a display name and confirmation email; normal login never sends an email. Password recovery establishes an authenticated recovery session before accepting a new password. Existing passwordless users should use **Forgot password** once to add a password to their existing Supabase user. This preserves their user ID, profile, revision records, and ownership relationships without recreating or relinking any data.
+The web app uses email-and-password authentication. Sign-up requires a display name and confirmation email; normal login never sends an email. Password recovery establishes an authenticated recovery session before accepting a new password, then signs out that temporary session and waits for the user to return to login explicitly. Existing passwordless users should use **Forgot password** once to add a password to their existing Supabase user. This preserves their user ID, profile, revision records, and ownership relationships without recreating or relinking any data.
 
 The display name is stored in `public.profiles` and is never used for authorization. Authentication changes do not require changes to RLS policies, grants, table ownership, profile triggers, or the account-deletion function.
 

@@ -7,6 +7,7 @@ import timeGridPlugin from "@fullcalendar/timegrid";
 import { DateTime } from "luxon";
 import { accountUrl, navigateTo } from "../auth/navigation";
 import "./tracker.css";
+import { revealTrackerAndUpdateCalendar } from "./layout";
 import {
   legacyRecordCounts,
   PersistenceController,
@@ -46,7 +47,7 @@ if (navigator.onLine) await persistence.flushQueue();
 let repository = persistence.repository;
 let state = await repository.load();
 let selectedDate = DateTime.now().setZone(state.profile.timezone).startOf("day").toJSDate();
-let calendar: Calendar;
+let calendar!: Calendar;
 let statusTimer: number | undefined;
 let activeEventId: string | undefined;
 let sessionFailure = false;
@@ -751,7 +752,10 @@ persistence.onAuthChange((auth) => {
   }
 });
 
-$<HTMLElement>("[data-tracker-guard]").hidden = true;
-$<HTMLElement>("[data-tracker-shell]").hidden = false;
+revealTrackerAndUpdateCalendar(
+  $<HTMLElement>("[data-tracker-guard]"),
+  $<HTMLElement>("[data-tracker-shell]"),
+  calendar,
+);
 openLegacyImportIfEligible();
 requestAnimationFrame(() => requestAnimationFrame(() => document.body.classList.add("is-ready")));

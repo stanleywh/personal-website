@@ -48,7 +48,12 @@ function clientDouble(initialSession: Session | null = null) {
     from: vi.fn().mockReturnValue(profileQuery),
     functions: { invoke: vi.fn().mockResolvedValue({ error: null }) },
   } as unknown as SupabaseClient;
-  return { client, auth, emit: (event: AuthChangeEvent, next: Session | null) => authCallback?.(event, next) };
+  return {
+    client,
+    auth,
+    profileQuery,
+    emit: (event: AuthChangeEvent, next: Session | null) => authCallback?.(event, next),
+  };
 }
 
 describe("password authentication requests", () => {
@@ -117,7 +122,7 @@ describe("password recovery session", () => {
     const controller = new AuthController(fake.client);
     await controller.initialize();
 
-    await expect(controller.updatePassword("StudyNow1!")).rejects.toThrow(
+    await expect(controller.completePasswordRecovery("StudyNow1!")).rejects.toThrow(
       "Open a current password reset link",
     );
 
@@ -125,7 +130,7 @@ describe("password recovery session", () => {
     await vi.waitFor(() => expect(controller.state.phase).toBe("passwordRecovery"));
 
     fake.auth.getSession.mockResolvedValueOnce({ data: { session }, error: null });
-    const updated = await controller.updatePassword("ChangedNow2!");
+    const updated = await controller.completePasswordRecovery("ChangedNow2!");
     expect(fake.auth.updateUser).toHaveBeenCalledWith({ password: "ChangedNow2!" });
     expect(updated.phase).toBe("signedIn");
   });
@@ -138,6 +143,53 @@ describe("password recovery session", () => {
     fake.emit("PASSWORD_RECOVERY", session);
     fake.emit("INITIAL_SESSION", session);
     await vi.waitFor(() => expect(controller.state.phase).toBe("passwordRecovery"));
+  });
+
+  it("does not let an older profile request overwrite recovery mode", async () => {
+    let resolveProfile: ((value: {
+      data: { display_name: string };
+      error: null;
+      status: number;
+    }) => void) | undefined;
+    const pendingProfile = new Promise<{
+      data: { display_name: string };
+      error: null;
+      status: number;
+    }>((resolve) => {
+      resolveProfile = resolve;
+    });
+    const fake = clientDouble(session);
+    fake.profileQuery.maybeSingle.mockReturnValueOnce(pendingProfile);
+    const controller = new AuthController(fake.client);
+
+    const initialization = controller.initialize();
+    await vi.waitFor(() => expect(fake.profileQuery.maybeSingle).toHaveBeenCalled());
+    fake.emit("PASSWORD_RECOVERY", session);
+    await vi.waitFor(() => expect(controller.state.phase).toBe("passwordRecovery"));
+
+    resolveProfile?.({
+      data: { display_name: "Stanley" },
+      error: null,
+      status: 200,
+    });
+    await initialization;
+
+    expect(controller.state.phase).toBe("passwordRecovery");
+  });
+
+  it("keeps normal and recovery password changes separate", async () => {
+    const fake = clientDouble(session);
+    const controller = new AuthController(fake.client);
+    await controller.initialize();
+
+    await controller.changePassword("ChangedNow2!");
+    expect(fake.auth.updateUser).toHaveBeenCalledWith({ password: "ChangedNow2!" });
+
+    fake.emit("PASSWORD_RECOVERY", session);
+    await vi.waitFor(() => expect(controller.state.phase).toBe("passwordRecovery"));
+    await expect(controller.changePassword("AnotherNow3!")).rejects.toThrow(
+      "Sign in normally",
+    );
   });
 
   it("scrubs malformed callback fragments without treating them as recovery proof", async () => {

@@ -499,14 +499,49 @@
   font-weight: 700;
 }
 
+.account-submit:is(a) {
+  display: grid;
+  place-items: center;
+  text-decoration: none;
+}
+
 .account-submit:disabled {
   cursor: wait;
   opacity: 0.58;
 }
 
+.account-settings {
+  display: grid;
+  gap: 20px;
+}
+
+.account-settings__section {
+  padding: 20px;
+  display: grid;
+  gap: 15px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: rgba(255, 253, 248, 0.46);
+}
+
+.account-settings__section h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.account-settings__section h2 + p {
+  margin: 7px 0 0;
+  color: var(--muted);
+  font-size: 0.7rem;
+  line-height: 1.55;
+}
+
+.account-settings__section--quiet {
+  background: transparent;
+}
+
 .account-profile-actions,
 .account-legacy > div {
-  margin-top: 18px;
   display: flex;
   gap: 9px;
   flex-wrap: wrap;
@@ -531,9 +566,7 @@
 }
 
 .account-legacy {
-  margin-top: 26px;
-  padding-top: 21px;
-  border-top: 1px solid var(--border);
+  margin-top: 0;
 }
 
 .account-legacy h2 {
@@ -546,6 +579,22 @@
   color: var(--muted);
   font-size: 0.7rem;
   line-height: 1.55;
+}
+
+.account-recovery-success {
+  padding: 20px;
+  display: grid;
+  gap: 17px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: rgba(255, 253, 248, 0.46);
+}
+
+.account-recovery-success p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.76rem;
+  line-height: 1.65;
 }
 
 @media (prefers-reduced-motion: reduce) {

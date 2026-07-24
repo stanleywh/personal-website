@@ -66,6 +66,7 @@ export class AuthController {
   private initializePromise?: Promise<AuthSnapshot>;
   private authSubscription?: { unsubscribe(): void };
   private recoveryActive = false;
+  private sessionApplication = 0;
 
   constructor(private readonly client: SupabaseClient | null = supabase) {
     this.snapshot = {
@@ -142,6 +143,9 @@ export class AuthController {
   }
 
   private async applySession(session: Session | null): Promise<AuthSnapshot> {
+    const application = ++this.sessionApplication;
+    const isCurrent = (): boolean => application === this.sessionApplication;
+
     if (!session) {
       return this.emit({
         phase: "signedOut",
@@ -191,9 +195,22 @@ export class AuthController {
       .eq("id", session.user.id)
       .maybeSingle();
 
+    if (!isCurrent()) return this.snapshot;
+
+    if (this.recoveryActive) {
+      return this.emit({
+        phase: "passwordRecovery",
+        configured: true,
+        session,
+        user: session.user,
+        profile: fallback,
+      });
+    }
+
     if (error) {
       if (isAuthorizationFailure(error, status)) {
         await client.auth.signOut({ scope: "local" });
+        if (!isCurrent()) return this.snapshot;
         return this.emit({
           phase: "signedOut",
           configured: true,
@@ -263,6 +280,7 @@ export class AuthController {
   async signInWithPassword(email: string, password: string): Promise<AuthSnapshot> {
     const client = this.requireClient();
     this.recoveryActive = false;
+    this.sessionApplication += 1;
     const { data, error } = await client.auth.signInWithPassword({
       email: email.trim(),
       password,
@@ -279,7 +297,7 @@ export class AuthController {
     }
   }
 
-  async updatePassword(password: string): Promise<AuthSnapshot> {
+  async completePasswordRecovery(password: string): Promise<AuthSnapshot> {
     if (!this.recoveryActive || !this.snapshot.session) {
       throw new Error("Open a current password reset link before choosing a new password.");
     }
@@ -288,11 +306,26 @@ export class AuthController {
     const { error } = await client.auth.updateUser({ password });
     if (error) throw new Error(error.message);
     this.recoveryActive = false;
+    this.sessionApplication += 1;
     const { data, error: sessionError } = await client.auth.getSession();
     if (sessionError || !data.session) {
       throw new Error(sessionError?.message ?? "The updated session could not be restored.");
     }
     return this.applySession(data.session);
+  }
+
+  async changePassword(password: string): Promise<void> {
+    if (
+      !this.snapshot.session
+      || this.recoveryActive
+      || this.snapshot.phase === "passwordRecovery"
+    ) {
+      throw new Error("Sign in normally before changing your password.");
+    }
+    validatePassword(password);
+    const client = this.requireClient();
+    const { error } = await client.auth.updateUser({ password });
+    if (error) throw new Error(error.message);
   }
 
   async updateDisplayName(value: string): Promise<void> {
@@ -316,6 +349,7 @@ export class AuthController {
 
   async signOut(): Promise<void> {
     this.recoveryActive = false;
+    this.sessionApplication += 1;
     if (this.client) {
       const { error } = await this.client.auth.signOut({ scope: "local" });
       if (error) throw new Error(error.message);
