@@ -24,8 +24,9 @@ html { min-height: 100%; }
   --accent-dark: #5e4c39;
   --danger: #9a5348;
   margin: 0;
+  min-width: 320px;
   min-height: 100vh;
-  min-height: var(--app-full-viewport-height, 100svh);
+  min-height: 100svh;
   background:
     radial-gradient(circle at 92% 3%, rgba(255, 253, 246, 0.78), transparent 32rem),
     var(--background);
@@ -34,7 +35,7 @@ html { min-height: 100%; }
 
 .tracker-auth-guard {
   min-height: 100vh;
-  min-height: var(--app-full-viewport-height, 100svh);
+  min-height: 100svh;
   display: grid;
   place-content: center;
   justify-items: center;

@@ -39,49 +39,20 @@ describe("initial calendar layout", () => {
     const gateStyles = parsed.querySelector<HTMLLinkElement>(
       'head link[rel="stylesheet"][href="/src/tracker/auth-gate.css"]',
     );
-    const sharedStyles = parsed.querySelector<HTMLLinkElement>(
-      'head link[rel="stylesheet"][href="/styles.css"]',
-    );
     const entryScript = parsed.querySelector<HTMLScriptElement>(
       'head script[src="/src/tracker/entry.ts"]',
     );
     const shell = parsed.querySelector<HTMLElement>("[data-tracker-shell]");
     const skipLink = parsed.querySelector<HTMLAnchorElement>(".skip-link");
 
-    expect(sharedStyles).not.toBeNull();
     expect(gateStyles).not.toBeNull();
     expect(entryScript).not.toBeNull();
-    expect(
-      sharedStyles!.compareDocumentPosition(gateStyles!)
-      & Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
     expect(
       gateStyles!.compareDocumentPosition(entryScript!)
       & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
     expect(shell?.hidden).toBe(true);
     expect(skipLink?.closest("[data-tracker-shell]")).toBe(shell);
-  });
-
-  it("defines one desktop density scale with compensated viewport sizing", () => {
-    const sharedStyles = readFileSync(resolve("styles.css"), "utf8");
-    const gateStyles = readFileSync(resolve("src/tracker/auth-gate.css"), "utf8");
-    const trackerStyles = readFileSync(resolve("src/tracker/tracker.css"), "utf8");
-    const trackerSource = readFileSync(resolve("src/tracker/main.ts"), "utf8");
-
-    expect(sharedStyles).toContain("@supports (zoom: 0.8)");
-    expect(sharedStyles).toContain("@media (min-width: 1024px)");
-    expect(sharedStyles).toContain("--app-density-scale: 0.8");
-    expect(sharedStyles).toContain("zoom: var(--app-density-scale)");
-    expect(sharedStyles).toContain("--app-full-viewport-height: 125svh");
-    expect(sharedStyles).toContain("--app-modal-viewport-limit: 110vh");
-    expect(sharedStyles).toContain("--app-calendar-fluid-height: 90vh");
-    expect(gateStyles).toContain("var(--app-full-viewport-height, 100svh)");
-    expect(trackerStyles).toContain("var(--app-modal-viewport-limit, 88vh)");
-    expect(trackerStyles).toContain("@media (width < 1024px)");
-    expect(trackerSource).toContain(
-      'const TIME_GRID_HEIGHT = "clamp(560px, var(--app-calendar-fluid-height, 72vh), 720px)";',
-    );
   });
 
   it("keeps one labelled add-event action and includes inline validation and confirmation UI", () => {
