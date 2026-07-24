@@ -8,17 +8,18 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/src/tracker/auth-gate.css">
   <script type="module" src="/src/tracker/entry.ts"></script>
 </head>
 <body class="tracker">
-  <div class="tracker-auth-guard" data-tracker-guard role="status" aria-live="polite">
+  <div class="tracker-auth-guard" data-tracker-guard data-state="pending" role="status" aria-live="polite" aria-atomic="true" aria-busy="true">
     <span class="tracker-auth-guard__spinner" aria-hidden="true"></span>
     <p data-tracker-guard-message>Checking your account…</p>
     <a href="/account/?mode=login&amp;next=tracker">Go to login</a>
   </div>
-  <a class="skip-link" href="#calendar">Skip to calendar</a>
 
   <div class="tracker-shell" data-tracker-shell hidden>
+    <a class="skip-link" href="#calendar">Skip to calendar</a>
     <header class="tracker-header reveal" style="--reveal-order: 0">
       <a class="back-link" href="/" aria-label="Back to home">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14.5 6-6 6 6 6M9 12h10"></path></svg>

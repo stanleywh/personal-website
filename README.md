@@ -43,7 +43,7 @@ npm.cmd run build
    - `http://127.0.0.1:5173/account/?mode=recovery&next=tracker`
    - `revisiontracker://auth/callback`
 7. In **Authentication → Providers → Email**, keep Email and signup enabled, keep **Confirm email** enabled, set the minimum password length to 8, and require lowercase, uppercase, digits, and symbols. Keep **Require current password to change password** disabled so existing passwordless users can complete an authenticated recovery.
-8. In **Authentication → Email Templates**, keep the Confirm signup and Reset password templates on `{{ .ConfirmationURL }}` so each requested redirect is retained. The Magic Link template is unused. Enable the password-changed security notification and verify production SMTP delivers confirmation and recovery messages. If the project plan does not allow custom templates, use Supabase's defaults.
+8. In **Authentication → Email Templates**, keep the Confirm signup and Reset password templates on `{{ .ConfirmationURL }}` so each requested redirect is retained. The Confirm signup body must contain a real HTML anchor, for example `<a href="{{ .ConfirmationURL }}">Confirm email address</a>`. The Magic Link template is unused. Enable the password-changed security notification and verify production SMTP delivers confirmation and recovery messages. If the project plan does not allow custom templates, use Supabase's defaults.
 9. Retain the one-hour token expiry and email rate limits, and configure CAPTCHA and other production abuse controls before enabling public registration.
 10. Set the `delete-account` Edge Function secret `ALLOWED_ORIGINS` to `https://dashboard.prerelease.uk,http://localhost:5173,http://127.0.0.1:5173`, then redeploy only that function.
 
@@ -54,6 +54,19 @@ The web app uses email-and-password authentication. Sign-up requires a display n
 The display name is stored in `public.profiles` and is never used for authorization. Authentication changes do not require changes to RLS policies, grants, table ownership, profile triggers, or the account-deletion function.
 
 Tracker caches and offline queues use keys scoped by Supabase user ID. The first cloud-empty account on a browser can explicitly import, retain, or discard data from the former shared local keys.
+
+### Confirmation email troubleshooting
+
+The safe hosted **Confirm signup** template structure is:
+
+```html
+<h2>Confirm your email address</h2>
+<p>Follow the link below to finish creating your account.</p>
+<p><a href="{{ .ConfirmationURL }}">Confirm email address</a></p>
+<p>If you did not create this account, you can ignore this email.</p>
+```
+
+If Gmail displays the label without a clickable link, inspect the affected message with **Show original** before changing SMTP. Confirm that a `text/html` MIME part contains the anchor and a Supabase `/auth/v1/verify` URL, then test the same message after choosing **Report not spam**. Check SPF, DKIM, DMARC, Supabase Auth generation logs, and Resend delivery status separately. Redact recipient addresses and token values; never share SMTP passwords, API keys, access tokens, or live confirmation URLs. If the raw anchor is valid, treat Spam placement as a deliverability problem rather than changing the frontend signup flow.
 
 ## GitHub Pages
 
@@ -87,6 +100,20 @@ npm.cmd run build
 npm.cmd run verify:dist
 Remove-Item Env:GITHUB_ACTIONS
 ```
+
+### Stale local navigation
+
+Finance and Projects are intentionally absent. `npm run dev` serves the current source, while `npm run preview` serves the last `dist` build. To confirm that a local view is current:
+
+```powershell
+git status --short --branch
+git branch --show-current
+git log -1 --oneline --decorate
+git fetch origin main
+git rev-list --left-right --count HEAD...origin/main
+```
+
+An up-to-date checkout prints `0 0` on the final command. Stop any old Vite process with `Ctrl+C`, restart with `npm.cmd run dev -- --host 127.0.0.1`, and use `Ctrl+F5` at `http://127.0.0.1:5173/`. If necessary, restart once with `npm.cmd run dev -- --force --host 127.0.0.1`. Build and run `npm.cmd run verify:dist` before using preview; the verifier rejects Finance or Projects output.
 
 ## Apple companion
 

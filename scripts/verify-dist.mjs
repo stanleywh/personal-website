@@ -86,4 +86,12 @@ for (const [relativePath, snippets] of routeExpectations) {
   }
 }
 
+const trackerHtml = readFileSync(resolve(dist, "tracker/index.html"), "utf8");
+if (!/<link[^>]+rel="stylesheet"[^>]+href="\/assets\/[^"]+\.css"/.test(trackerHtml)) {
+  fail("tracker/index.html is missing its render-blocking authentication gate stylesheet");
+}
+if (trackerHtml.indexOf('class="skip-link"') < trackerHtml.indexOf("data-tracker-shell")) {
+  fail("tracker skip link must remain inside the authenticated tracker shell");
+}
+
 console.log("dist verification passed");

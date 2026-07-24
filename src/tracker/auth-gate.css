@@ -1,0 +1,121 @@
+:root {
+  color-scheme: light;
+  font-family: "Manrope", "Segoe UI", sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+* { box-sizing: border-box; }
+html { min-height: 100%; }
+.tracker [hidden] { display: none !important; }
+
+.tracker {
+  --background: #eee8dc;
+  --surface: #f8f4eb;
+  --surface-strong: #fffdf8;
+  --surface-muted: #e9e1d3;
+  --text: #2f2a24;
+  --muted: #7d7469;
+  --faint: #aaa093;
+  --border: rgba(63, 54, 43, 0.14);
+  --border-strong: rgba(63, 54, 43, 0.24);
+  --accent: #78634b;
+  --accent-dark: #5e4c39;
+  --danger: #9a5348;
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  min-height: 100svh;
+  background:
+    radial-gradient(circle at 92% 3%, rgba(255, 253, 246, 0.78), transparent 32rem),
+    var(--background);
+  color: var(--text);
+}
+
+.tracker-auth-guard {
+  min-height: 100vh;
+  min-height: 100svh;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 12px;
+  color: var(--muted);
+  font-size: .75rem;
+  text-align: center;
+  visibility: hidden;
+  opacity: 0;
+  animation: tracker-auth-gate-fallback 0s 3s forwards;
+}
+
+.tracker-auth-guard[data-state="loading"],
+.tracker-auth-guard[data-state="slow"],
+.tracker-auth-guard[data-state="error"] {
+  visibility: visible;
+  opacity: 1;
+  animation: none;
+}
+
+.tracker-auth-guard__spinner {
+  width: 30px;
+  height: 30px;
+  border: 3px solid #e8e0d3;
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: tracker-spin .8s linear infinite;
+}
+
+.tracker-auth-guard p { margin: 0; }
+
+.tracker-auth-guard a {
+  color: var(--accent-dark);
+  font-weight: 700;
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+  animation: tracker-auth-link-fallback 0s 12s forwards;
+}
+
+.tracker-auth-guard[data-state="loading"] a {
+  animation: none;
+}
+
+.tracker-auth-guard[data-state="slow"] a,
+.tracker-auth-guard[data-state="error"] a {
+  visibility: visible;
+  opacity: 1;
+  pointer-events: auto;
+  animation: none;
+}
+
+.tracker-auth-guard[data-state="error"] .tracker-auth-guard__spinner {
+  display: none;
+}
+
+.tracker-auth-guard a:focus-visible {
+  outline: 3px solid rgba(120, 99, 75, 0.38);
+  outline-offset: 3px;
+}
+
+@keyframes tracker-spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes tracker-auth-gate-fallback {
+  to {
+    visibility: visible;
+    opacity: 1;
+  }
+}
+
+@keyframes tracker-auth-link-fallback {
+  to {
+    visibility: visible;
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tracker-auth-guard__spinner { animation: none; }
+}
