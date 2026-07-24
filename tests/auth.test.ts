@@ -1,14 +1,20 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { accountMode, safeNextPage } from "../src/auth/navigation";
+import {
+  accountMode,
+  accountUrl,
+  pageUrl,
+  safeNextPage,
+} from "../src/auth/navigation";
 
 describe("account navigation", () => {
   it("accepts only known internal return pages", () => {
-    expect(safeNextPage("tracker.html")).toBe("tracker.html");
-    expect(safeNextPage("/projects.html")).toBe("index.html");
-    expect(safeNextPage("https://attacker.example/")).toBe("index.html");
-    expect(safeNextPage("//attacker.example/tracker.html")).toBe("index.html");
-    expect(safeNextPage("tracker.html?ignored=true")).toBe("tracker.html");
+    expect(safeNextPage("tracker")).toBe("tracker");
+    expect(safeNextPage("home")).toBe("home");
+    expect(safeNextPage("/projects/")).toBe("home");
+    expect(safeNextPage("https://attacker.example/")).toBe("home");
+    expect(safeNextPage("//attacker.example/tracker/")).toBe("home");
+    expect(safeNextPage("tracker?ignored=true")).toBe("tracker");
   });
 
   it("normalizes unknown account modes to login", () => {
@@ -21,9 +27,21 @@ describe("account navigation", () => {
   });
 
   it("keeps return destinations internal even when query text is injected", () => {
-    expect(safeNextPage("tracker.html?next=https://attacker.example")).toBe("tracker.html");
-    expect(safeNextPage("unknown.html")).toBe("index.html");
-    expect(safeNextPage("javascript:alert(1)")).toBe("index.html");
+    expect(safeNextPage("tracker?next=https://attacker.example")).toBe("tracker");
+    expect(safeNextPage("tracker.html")).toBe("home");
+    expect(safeNextPage("unknown")).toBe("home");
+    expect(safeNextPage("javascript:alert(1)")).toBe("home");
+  });
+
+  it("builds canonical root-relative page and account URLs", () => {
+    expect(pageUrl("home").pathname).toBe("/");
+    expect(pageUrl("tracker").pathname).toBe("/tracker/");
+    expect(pageUrl("account").pathname).toBe("/account/");
+
+    const login = accountUrl("login", "tracker");
+    expect(login.pathname).toBe("/account/");
+    expect(login.searchParams.get("mode")).toBe("login");
+    expect(login.searchParams.get("next")).toBe("tracker");
   });
 });
 
@@ -32,7 +50,7 @@ describe("removed magic-link client paths", () => {
     const sources = [
       "../src/auth/session.ts",
       "../src/account/main.ts",
-      "../account.html",
+      "../account/index.html",
       "../apple/RevisionTracker/Services/AuthService.swift",
       "../apple/RevisionTracker/Views/ContentView.swift",
     ].map((path) => readFileSync(new URL(path, import.meta.url), "utf8")).join("\n");

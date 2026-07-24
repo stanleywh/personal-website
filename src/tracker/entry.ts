@@ -12,16 +12,16 @@ function showError(message: string): void {
 
 const auth = await authController.initialize();
 if (auth.phase === "signedOut") {
-  window.location.replace(accountUrl("login", "tracker.html"));
+  window.location.replace(accountUrl("login", "tracker"));
 } else if (auth.phase === "profileIncomplete") {
-  window.location.replace(accountUrl("complete-profile", "tracker.html"));
+  window.location.replace(accountUrl("complete-profile", "tracker"));
 } else if (auth.phase === "signedIn") {
   try {
     await import("./main");
   } catch (error) {
     if (error instanceof TrackerAuthorizationError) {
       await authController.signOut();
-      window.location.replace(accountUrl("login", "tracker.html"));
+      window.location.replace(accountUrl("login", "tracker"));
     } else {
       showError(error instanceof Error ? error.message : "The tracker could not be loaded.");
     }

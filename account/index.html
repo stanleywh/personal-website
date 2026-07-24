@@ -8,12 +8,12 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="/styles.css">
   <script type="module" src="/src/account/main.ts"></script>
 </head>
 <body class="home account-page">
   <main class="account-shell">
-    <a class="account-back" href="index.html">← Home</a>
+    <a class="account-back" href="/">← Home</a>
     <section class="account-card" aria-labelledby="account-title">
       <p class="account-kicker">Your account</p>
       <h1 id="account-title" data-account-title>Welcome back</h1>
@@ -51,7 +51,7 @@
         <p class="account-message" data-account-message aria-live="polite"></p>
         <button class="account-submit" type="submit" data-account-submit>Log in</button>
         <button class="account-text-action" type="button" data-login-return hidden>Back to login</button>
-        <a class="account-text-action" href="account.html?mode=forgot-password" data-recovery-retry hidden>Request a new reset link</a>
+        <a class="account-text-action" href="/account/?mode=forgot-password" data-recovery-retry hidden>Request a new reset link</a>
       </form>
 
       <section class="account-settings" data-profile-settings hidden aria-label="Profile settings">
@@ -105,7 +105,7 @@
 
       <section class="account-recovery-success" data-recovery-success hidden aria-live="polite">
         <p>Your password has been updated and this recovery session has been signed out.</p>
-        <a class="account-submit" href="account.html?mode=login" data-recovery-login>Return to login</a>
+        <a class="account-submit" href="/account/?mode=login" data-recovery-login>Return to login</a>
       </section>
     </section>
   </main>

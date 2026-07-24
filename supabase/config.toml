@@ -1,25 +1,25 @@
 project_id = "revision-tracker"
 
 [auth]
-site_url = "https://stanleywh.github.io/personal-website/"
+site_url = "https://dashboard.prerelease.uk/"
 minimum_password_length = 8
 password_requirements = "lower_upper_letters_digits_symbols"
 additional_redirect_urls = [
-  "https://stanleywh.github.io/personal-website/account.html",
-  "https://stanleywh.github.io/personal-website/account.html?mode=callback&next=index.html",
-  "https://stanleywh.github.io/personal-website/account.html?mode=callback&next=tracker.html",
-  "https://stanleywh.github.io/personal-website/account.html?mode=recovery&next=index.html",
-  "https://stanleywh.github.io/personal-website/account.html?mode=recovery&next=tracker.html",
-  "http://localhost:5173/account.html",
-  "http://localhost:5173/account.html?mode=callback&next=index.html",
-  "http://localhost:5173/account.html?mode=callback&next=tracker.html",
-  "http://localhost:5173/account.html?mode=recovery&next=index.html",
-  "http://localhost:5173/account.html?mode=recovery&next=tracker.html",
-  "http://127.0.0.1:5173/account.html",
-  "http://127.0.0.1:5173/account.html?mode=callback&next=index.html",
-  "http://127.0.0.1:5173/account.html?mode=callback&next=tracker.html",
-  "http://127.0.0.1:5173/account.html?mode=recovery&next=index.html",
-  "http://127.0.0.1:5173/account.html?mode=recovery&next=tracker.html",
+  "https://dashboard.prerelease.uk/account/",
+  "https://dashboard.prerelease.uk/account/?mode=callback&next=home",
+  "https://dashboard.prerelease.uk/account/?mode=callback&next=tracker",
+  "https://dashboard.prerelease.uk/account/?mode=recovery&next=home",
+  "https://dashboard.prerelease.uk/account/?mode=recovery&next=tracker",
+  "http://localhost:5173/account/",
+  "http://localhost:5173/account/?mode=callback&next=home",
+  "http://localhost:5173/account/?mode=callback&next=tracker",
+  "http://localhost:5173/account/?mode=recovery&next=home",
+  "http://localhost:5173/account/?mode=recovery&next=tracker",
+  "http://127.0.0.1:5173/account/",
+  "http://127.0.0.1:5173/account/?mode=callback&next=home",
+  "http://127.0.0.1:5173/account/?mode=callback&next=tracker",
+  "http://127.0.0.1:5173/account/?mode=recovery&next=home",
+  "http://127.0.0.1:5173/account/?mode=recovery&next=tracker",
   "revisiontracker://auth/callback",
 ]
 

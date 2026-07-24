@@ -24,28 +24,28 @@ npm.cmd run build
 2. Apply the SQL files in `supabase/migrations` in filename order through the Supabase CLI.
 3. Deploy the `delete-account` Edge Function.
 4. Copy `.env.example` to `.env.local` and insert the project URL and public publishable key. The legacy `VITE_SUPABASE_ANON_KEY` name remains a temporary fallback. Never expose the service-role key in the website or native app.
-5. Set the Auth Site URL to `https://stanleywh.github.io/personal-website/`.
+5. Set the Auth Site URL to `https://dashboard.prerelease.uk/`.
 6. Add these exact Auth redirect URLs:
-   - `https://stanleywh.github.io/personal-website/account.html`
-   - `https://stanleywh.github.io/personal-website/account.html?mode=callback&next=index.html`
-   - `https://stanleywh.github.io/personal-website/account.html?mode=callback&next=tracker.html`
-   - `https://stanleywh.github.io/personal-website/account.html?mode=recovery&next=index.html`
-   - `https://stanleywh.github.io/personal-website/account.html?mode=recovery&next=tracker.html`
-   - `http://localhost:5173/account.html`
-   - `http://localhost:5173/account.html?mode=callback&next=index.html`
-   - `http://localhost:5173/account.html?mode=callback&next=tracker.html`
-   - `http://localhost:5173/account.html?mode=recovery&next=index.html`
-   - `http://localhost:5173/account.html?mode=recovery&next=tracker.html`
-   - `http://127.0.0.1:5173/account.html`
-   - `http://127.0.0.1:5173/account.html?mode=callback&next=index.html`
-   - `http://127.0.0.1:5173/account.html?mode=callback&next=tracker.html`
-   - `http://127.0.0.1:5173/account.html?mode=recovery&next=index.html`
-   - `http://127.0.0.1:5173/account.html?mode=recovery&next=tracker.html`
+   - `https://dashboard.prerelease.uk/account/`
+   - `https://dashboard.prerelease.uk/account/?mode=callback&next=home`
+   - `https://dashboard.prerelease.uk/account/?mode=callback&next=tracker`
+   - `https://dashboard.prerelease.uk/account/?mode=recovery&next=home`
+   - `https://dashboard.prerelease.uk/account/?mode=recovery&next=tracker`
+   - `http://localhost:5173/account/`
+   - `http://localhost:5173/account/?mode=callback&next=home`
+   - `http://localhost:5173/account/?mode=callback&next=tracker`
+   - `http://localhost:5173/account/?mode=recovery&next=home`
+   - `http://localhost:5173/account/?mode=recovery&next=tracker`
+   - `http://127.0.0.1:5173/account/`
+   - `http://127.0.0.1:5173/account/?mode=callback&next=home`
+   - `http://127.0.0.1:5173/account/?mode=callback&next=tracker`
+   - `http://127.0.0.1:5173/account/?mode=recovery&next=home`
+   - `http://127.0.0.1:5173/account/?mode=recovery&next=tracker`
    - `revisiontracker://auth/callback`
 7. In **Authentication → Providers → Email**, keep Email and signup enabled, keep **Confirm email** enabled, set the minimum password length to 8, and require lowercase, uppercase, digits, and symbols. Keep **Require current password to change password** disabled so existing passwordless users can complete an authenticated recovery.
 8. In **Authentication → Email Templates**, keep the Confirm signup and Reset password templates on `{{ .ConfirmationURL }}` so each requested redirect is retained. The Magic Link template is unused. Enable the password-changed security notification and verify production SMTP delivers confirmation and recovery messages. If the project plan does not allow custom templates, use Supabase's defaults.
 9. Retain the one-hour token expiry and email rate limits, and configure CAPTCHA and other production abuse controls before enabling public registration.
-10. Set the `delete-account` Edge Function secret `ALLOWED_ORIGINS` to a comma-separated list containing `https://stanleywh.github.io,http://localhost:5173,http://127.0.0.1:5173`.
+10. Set the `delete-account` Edge Function secret `ALLOWED_ORIGINS` to `https://dashboard.prerelease.uk,http://localhost:5173,http://127.0.0.1:5173`, then redeploy only that function.
 
 Every user-owned table has row-level security. Events use soft-deletion tombstones; schedule `private.purge_expired_event_tombstones()` daily with Supabase Cron as the function-owning database role for the 30-day recovery policy.
 
@@ -57,7 +57,36 @@ Tracker caches and offline queues use keys scoped by Supabase user ID. The first
 
 ## GitHub Pages
 
-The Pages workflow runs tests and builds the site on pushes to `main`. Add `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` as repository Actions secrets, then select **GitHub Actions** as the Pages source.
+The Pages workflow runs tests, builds the site, and verifies its static directory routes on pushes to `main`. Add `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` as repository Actions secrets, then select **GitHub Actions** as the Pages source.
+
+The production routes are:
+
+- `https://dashboard.prerelease.uk/`
+- `https://dashboard.prerelease.uk/tracker/`
+- `https://dashboard.prerelease.uk/about/`
+- `https://dashboard.prerelease.uk/account/`
+
+To configure the custom domain:
+
+1. In personal GitHub **Settings → Pages**, verify `prerelease.uk` with the TXT record GitHub supplies and retain that record.
+2. In this repository's **Settings → Pages**, set the custom domain to `dashboard.prerelease.uk`.
+3. In Cloudflare, create a DNS-only `CNAME` named `dashboard` pointing to `stanleywh.github.io`. Do not include the repository name and do not create section subdomains.
+4. After DNS and GitHub certificate provisioning complete, enable **Enforce HTTPS** in GitHub Pages.
+
+The Actions deployment does not need a repository `CNAME` file. Before Supabase cutover, add the new redirect URLs above. After the custom domain has worked for at least the one-hour token-expiry window, remove all former `stanleywh.github.io/personal-website` redirects. Keep both Confirm signup and Reset password email templates on `{{ .ConfirmationURL }}` and remove any hard-coded former domain.
+
+Run the deployment checks locally with:
+
+```powershell
+npm.cmd test
+npm.cmd run typecheck
+npm.cmd run build
+npm.cmd run verify:dist
+$env:GITHUB_ACTIONS = "true"
+npm.cmd run build
+npm.cmd run verify:dist
+Remove-Item Env:GITHUB_ACTIONS
+```
 
 ## Apple companion
 

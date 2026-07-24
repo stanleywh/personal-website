@@ -10,7 +10,7 @@ import {
   type AccountAuth,
 } from "../src/account/page";
 
-const accountHtml = readFileSync(resolve(process.cwd(), "account.html"), "utf8");
+const accountHtml = readFileSync(resolve(process.cwd(), "account/index.html"), "utf8");
 const user = {
   id: "user-1",
   email: "user@example.com",
@@ -68,7 +68,7 @@ async function mount(mode: AccountMode, initial: AuthSnapshot) {
   const parsed = new DOMParser().parseFromString(accountHtml, "text/html");
   document.body.className = parsed.body.className;
   document.body.innerHTML = parsed.body.innerHTML;
-  window.history.replaceState({}, "", `/account.html?mode=${mode}&next=tracker.html`);
+  window.history.replaceState({}, "", `/account/?mode=${mode}&next=tracker`);
   const auth = new FakeAuth(initial);
   const navigateTo = vi.fn();
   const page = await initializeAccountPage({
@@ -76,7 +76,7 @@ async function mount(mode: AccountMode, initial: AuthSnapshot) {
     document,
     window,
     initialMode: mode,
-    nextPage: "tracker.html",
+    nextPage: "tracker",
     accountUrl,
     navigateTo,
     profileCacheKey,
@@ -175,7 +175,7 @@ describe("account page modes", () => {
       document.querySelector<HTMLAnchorElement>("[data-recovery-login]")!.href,
     );
     expect(loginUrl.searchParams.get("mode")).toBe("login");
-    expect(loginUrl.searchParams.get("next")).toBe("tracker.html");
+    expect(loginUrl.searchParams.get("next")).toBe("tracker");
   });
 
   it("keeps an invalid recovery request in recovery UI with a retry link", async () => {
@@ -200,6 +200,6 @@ describe("account page modes", () => {
     submit("[data-account-form]");
 
     await vi.waitFor(() => expect(auth.updateDisplayName).toHaveBeenCalledWith("Stanley"));
-    expect(navigateTo).toHaveBeenCalledWith("tracker.html", true);
+    expect(navigateTo).toHaveBeenCalledWith("tracker", true);
   });
 });

@@ -67,14 +67,14 @@ describe("password authentication requests", () => {
     const controller = new AuthController(fake.client);
     await controller.signUp("  user@example.com ", "StudyNow1!", {
       displayName: " Stanley ",
-      redirectTo: "https://example.test/account.html?mode=callback",
+      redirectTo: "https://example.test/account/?mode=callback&next=home",
     });
 
     expect(fake.auth.signUp).toHaveBeenCalledWith({
       email: "user@example.com",
       password: "StudyNow1!",
       options: {
-        emailRedirectTo: "https://example.test/account.html?mode=callback",
+        emailRedirectTo: "https://example.test/account/?mode=callback&next=home",
         data: expect.objectContaining({
           display_name: "Stanley",
           locale: expect.any(String),
@@ -100,7 +100,7 @@ describe("password authentication requests", () => {
   it("requests recovery with the exact supplied allow-listed URL", async () => {
     const fake = clientDouble();
     const controller = new AuthController(fake.client);
-    const redirectTo = "https://example.test/account.html?mode=recovery&next=tracker.html";
+    const redirectTo = "https://example.test/account/?mode=recovery&next=tracker";
     await controller.requestPasswordReset(" user@example.com ", redirectTo);
 
     expect(fake.auth.resetPasswordForEmail).toHaveBeenCalledWith(
@@ -114,7 +114,7 @@ describe("password recovery session", () => {
   beforeEach(() => {
     localStorage.clear();
     Object.defineProperty(navigator, "onLine", { configurable: true, value: true });
-    window.history.replaceState({}, "", "/account.html");
+    window.history.replaceState({}, "", "/account/");
   });
 
   it("prioritizes PASSWORD_RECOVERY and only then allows updateUser", async () => {
@@ -195,7 +195,7 @@ describe("password recovery session", () => {
   it("scrubs malformed callback fragments without treating them as recovery proof", async () => {
     const fake = clientDouble(null);
     const controller = new AuthController(fake.client);
-    window.history.replaceState({}, "", "/account.html?mode=recovery#type=recovery&bad_token=1");
+    window.history.replaceState({}, "", "/account/?mode=recovery#type=recovery&bad_token=1");
 
     const initialized = await controller.initialize();
 
@@ -208,7 +208,7 @@ describe("preserved account lifecycle behavior", () => {
   beforeEach(() => {
     localStorage.clear();
     Object.defineProperty(navigator, "onLine", { configurable: true, value: true });
-    window.history.replaceState({}, "", "/account.html");
+    window.history.replaceState({}, "", "/account/");
   });
 
   it("restores a persistent session and loads its existing profile", async () => {

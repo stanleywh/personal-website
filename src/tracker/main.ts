@@ -99,7 +99,7 @@ async function failClosedIfUnauthorized(error: unknown): Promise<boolean> {
   try {
     await persistence.signOut();
   } finally {
-    window.location.replace(accountUrl("login", "tracker.html"));
+    window.location.replace(accountUrl("login", "tracker"));
   }
   return true;
 }
@@ -538,7 +538,7 @@ function renderAccount(): void {
   button.textContent = auth.profile?.displayName ?? "Profile";
   const account = $<HTMLElement>("[data-settings-account]");
   if (auth.user) {
-    account.innerHTML = `<div><span>Signed in as</span><strong>${escapeHtml(auth.profile?.displayName ?? auth.user.email ?? "Your account")}</strong></div><div class="settings-account__actions"><a class="button button--quiet" href="${accountUrl("profile", "tracker.html")}">Edit profile</a><button class="button button--quiet" type="button" data-sign-out>Sign out</button><button class="button button--danger" type="button" data-delete-account>Delete account</button></div>`;
+    account.innerHTML = `<div><span>Signed in as</span><strong>${escapeHtml(auth.profile?.displayName ?? auth.user.email ?? "Your account")}</strong></div><div class="settings-account__actions"><a class="button button--quiet" href="${accountUrl("profile", "tracker")}">Edit profile</a><button class="button button--quiet" type="button" data-sign-out>Sign out</button><button class="button button--danger" type="button" data-delete-account>Delete account</button></div>`;
   } else {
     account.innerHTML = "<p>Your session has ended. Sign in again to continue.</p>";
   }
@@ -735,8 +735,8 @@ setStatus(navigator.onLine ? "saved" : "offline");
 persistence.onAuthChange((auth) => {
   if (auth.phase === "signedOut") {
     $<HTMLElement>("[data-tracker-shell]").hidden = true;
-    if (sessionFailure) window.location.replace(accountUrl("login", "tracker.html"));
-    else navigateTo("index.html", true);
+    if (sessionFailure) window.location.replace(accountUrl("login", "tracker"));
+    else navigateTo("home", true);
   }
   if (
     auth.phase === "error"
@@ -745,9 +745,9 @@ persistence.onAuthChange((auth) => {
   ) {
     $<HTMLElement>("[data-tracker-shell]").hidden = true;
     if (auth.phase === "profileIncomplete") {
-      window.location.replace(accountUrl("complete-profile", "tracker.html"));
+      window.location.replace(accountUrl("complete-profile", "tracker"));
     } else {
-      navigateTo("index.html", true);
+      navigateTo("home", true);
     }
   }
 });

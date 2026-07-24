@@ -16,11 +16,11 @@ function renderSignedOut(message?: string): void {
   if (account) {
     const login = document.createElement("a");
     login.className = "home-account__link";
-    login.href = accountUrl("login", "index.html").toString();
+    login.href = accountUrl("login", "home").toString();
     login.textContent = "Log in";
     const signup = document.createElement("a");
     signup.className = "home-account__link home-account__link--primary";
-    signup.href = accountUrl("signup", "index.html").toString();
+    signup.href = accountUrl("signup", "home").toString();
     signup.textContent = "Sign up";
     account.replaceChildren(login, signup);
     if (message) {
@@ -37,7 +37,7 @@ function renderSignedIn(displayName: string): void {
   if (account) {
     const profile = document.createElement("a");
     profile.className = "home-account__link";
-    profile.href = accountUrl("profile", "index.html").toString();
+    profile.href = accountUrl("profile", "home").toString();
     profile.textContent = "Profile";
     const logout = document.createElement("button");
     logout.className = "home-account__link";
@@ -58,13 +58,13 @@ function renderSignedIn(displayName: string): void {
 trackerLink?.addEventListener("click", (event) => {
   if (authController.state.phase !== "signedIn") {
     event.preventDefault();
-    window.location.assign(accountUrl("login", "tracker.html"));
+    window.location.assign(accountUrl("login", "tracker"));
   }
 });
 
 const auth = await authController.initialize();
 if (auth.phase === "profileIncomplete") {
-  window.location.replace(accountUrl("complete-profile", "index.html"));
+  window.location.replace(accountUrl("complete-profile", "home"));
 } else if (auth.phase === "signedIn" && auth.profile?.displayName) {
   renderSignedIn(auth.profile.displayName);
 } else {
@@ -78,5 +78,5 @@ requestAnimationFrame(() => requestAnimationFrame(() => home?.classList.add("is-
 authController.onChange((next) => {
   if (next.phase === "signedOut") renderSignedOut();
   if (next.phase === "signedIn" && next.profile?.displayName) renderSignedIn(next.profile.displayName);
-  if (next.phase === "profileIncomplete") navigateTo("account.html");
+  if (next.phase === "profileIncomplete") navigateTo("account");
 });

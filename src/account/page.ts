@@ -1,5 +1,9 @@
 import type { AuthSnapshot } from "../auth/session";
-import type { AccountMode } from "../auth/navigation";
+import type {
+  AccountMode,
+  PageName,
+  ReturnPage,
+} from "../auth/navigation";
 import { validatePasswordConfirmation } from "../auth/password";
 
 export interface AccountAuth {
@@ -25,9 +29,9 @@ export interface AccountPageOptions {
   document: Document;
   window: Window;
   initialMode: AccountMode;
-  nextPage: string;
-  accountUrl(mode: AccountMode, next?: string): URL;
-  navigateTo(page: string, replace?: boolean): void;
+  nextPage: ReturnPage;
+  accountUrl(mode: AccountMode, next?: ReturnPage): URL;
+  navigateTo(page: PageName, replace?: boolean): void;
   profileCacheKey(userId: string): string;
 }
 
@@ -426,7 +430,7 @@ export async function initializeAccountPage(options: AccountPageOptions): Promis
     if (target.closest("[data-account-logout]")) {
       try {
         await auth.signOut();
-        navigateTo("index.html", true);
+        navigateTo("home", true);
       } catch (error) {
         setMessage(displayNameMessage, error instanceof Error ? error.message : "Could not log out.", true);
       }
@@ -442,7 +446,7 @@ export async function initializeAccountPage(options: AccountPageOptions): Promis
           window.localStorage.removeItem(`revision-tracker:user:${userId}:legacy-dismissed:v1`);
           window.localStorage.removeItem(`revision-tracker:user:${userId}:legacy-import-pending:v1`);
         }
-        navigateTo("index.html", true);
+        navigateTo("home", true);
       } catch (error) {
         setMessage(displayNameMessage, error instanceof Error ? error.message : "Account deletion failed.", true);
       }
@@ -451,7 +455,7 @@ export async function initializeAccountPage(options: AccountPageOptions): Promis
 
   legacyActions.addEventListener("click", (event) => {
     const target = event.target as HTMLElement;
-    if (target.closest("[data-legacy-import]")) navigateTo("tracker.html");
+    if (target.closest("[data-legacy-import]")) navigateTo("tracker");
     if (
       target.closest("[data-legacy-delete]")
       && window.confirm("Delete the legacy browser data on this device?")

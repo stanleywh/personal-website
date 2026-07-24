@@ -8,7 +8,9 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "verify:dist": "node scripts/verify-dist.mjs"
   },
   "dependencies": {
     "@fullcalendar/core": "^6.1.19",
