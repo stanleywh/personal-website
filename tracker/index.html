@@ -77,7 +77,6 @@
                 <p class="section-kicker">Selected day</p>
                 <h3 id="agenda-title" data-agenda-date>Today</h3>
               </div>
-              <button class="icon-button icon-button--compact" type="button" data-agenda-add aria-label="Add an event on the selected day">+</button>
             </div>
             <div class="agenda__list" data-agenda-list></div>
           </aside>
@@ -149,8 +148,9 @@
       <input type="hidden" name="id">
       <div class="form-grid">
         <label class="field field--wide"><span>Title</span><input name="title" required maxlength="120" placeholder="Past paper practice"></label>
-        <label class="field"><span>Starts</span><input name="start" type="datetime-local" required></label>
-        <label class="field"><span>Ends</span><input name="end" type="datetime-local" required></label>
+        <label class="field"><span>Starts</span><input name="start" type="datetime-local" required aria-describedby="event-time-error"></label>
+        <label class="field"><span>Ends</span><input name="end" type="datetime-local" required aria-describedby="event-time-error"></label>
+        <p class="form-message field--wide event-time-error" id="event-time-error" data-event-time-error aria-live="polite"></p>
         <label class="check-field"><input name="allDay" type="checkbox"><span>All-day event</span></label>
         <label class="field"><span>Timezone</span><input name="timezone" list="timezone-list" required></label>
         <label class="field"><span>Subject</span><select name="subjectId"><option value="">No subject</option></select></label>
@@ -210,7 +210,8 @@
       <div class="form-grid">
         <label class="field field--wide"><span>Date and time</span><input name="revisedAt" type="datetime-local" required></label>
         <label class="field"><span>Duration</span><div class="input-suffix"><input name="durationMinutes" type="number" min="1" max="1440" value="45"><span>min</span></div></label>
-        <fieldset class="rating-field field--wide"><legend>Mastery after this session</legend><div data-session-rating></div></fieldset>
+        <fieldset class="rating-field field--wide"><legend>Mastery after this session</legend><div data-session-rating></div><p class="form-message rating-error" id="session-mastery-error" data-session-mastery-error aria-live="polite"></p></fieldset>
+        <p class="form-message field--wide session-error" data-session-error aria-live="polite"></p>
         <label class="field field--wide"><span>Notes</span><textarea name="notes" rows="3" maxlength="1000"></textarea></label>
       </div>
       <div class="modal__footer"><button class="button button--quiet" value="cancel" formnovalidate>Cancel</button><button class="button button--primary" value="default" data-save-session>Log session</button></div>
@@ -263,6 +264,20 @@
         <button class="button button--danger modal__footer-start" type="button" data-legacy-discard>Discard</button>
         <button class="button button--quiet" type="button" data-legacy-keep>Keep on device</button>
         <button class="button button--primary" type="button" data-legacy-import>Import</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog class="modal modal--narrow confirmation-dialog" data-confirm-dialog aria-labelledby="confirmation-dialog-title" aria-describedby="confirmation-dialog-message">
+    <form method="dialog">
+      <div class="modal__header">
+        <div><p class="section-kicker">Please confirm</p><h2 id="confirmation-dialog-title" data-confirm-title>Confirm action</h2></div>
+      </div>
+      <p class="modal-copy confirmation-dialog__message" id="confirmation-dialog-message" data-confirm-message></p>
+      <p class="form-message confirmation-dialog__error" data-confirm-error aria-live="assertive"></p>
+      <div class="modal__footer">
+        <button class="button button--quiet" type="button" data-confirm-cancel>Cancel</button>
+        <button class="button button--danger" type="button" data-confirm-submit>Confirm</button>
       </div>
     </form>
   </dialog>

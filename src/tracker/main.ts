@@ -6,8 +6,10 @@ import rrulePlugin from "@fullcalendar/rrule";
 import timeGridPlugin from "@fullcalendar/timegrid";
 import { DateTime } from "luxon";
 import { accountUrl, navigateTo } from "../auth/navigation";
+import { createConfirmationDialog } from "./confirmation-dialog";
 import "./tracker.css";
 import { revealTrackerAndUpdateCalendar } from "./layout";
+import { mountStarRating, type StarRatingController } from "./rating";
 import {
   legacyRecordCounts,
   PersistenceController,
@@ -16,6 +18,7 @@ import {
 } from "./store";
 import type { CalendarEventRecord, LabelKind, Profile, RevisionItem, RevisionSession, StudyLabel } from "./types";
 import {
+  defaultSessionDuration,
   downloadText,
   endOfLocalDay,
   escapeHtml,
@@ -25,11 +28,16 @@ import {
   fromLocalInput,
   getLastRevised,
   isoNow,
+  isSourceEventLogged,
+  loggedSourceEventIds,
   nextMidnightDelay,
+  reconcileEndAfterStart,
   safeColor,
   startOfLocalDay,
   toLocalInput,
+  toZonedLocalInput,
   uid,
+  validateEventRange,
 } from "./utils";
 
 document.documentElement.classList.add("js");
@@ -51,6 +59,9 @@ let calendar!: Calendar;
 let statusTimer: number | undefined;
 let activeEventId: string | undefined;
 let sessionFailure = false;
+let eventLastValidDurationMs = 60 * 60_000;
+let revisionRating: StarRatingController | undefined;
+let sessionRating: StarRatingController | undefined;
 
 const TIME_GRID_HEIGHT = "clamp(560px, 72vh, 720px)";
 const WEEKDAY_CODES = ["MO", "TU", "WE", "TH", "FR", "SA", "SU"] as const;
@@ -68,6 +79,26 @@ const labelDialog = $<HTMLDialogElement>("[data-label-dialog]");
 const settingsDialog = $<HTMLDialogElement>("[data-settings-dialog]");
 const privacyDialog = $<HTMLDialogElement>("[data-privacy-dialog]");
 const legacyDialog = $<HTMLDialogElement>("[data-legacy-dialog]");
+const eventStartInput = $<HTMLInputElement>("[name='start']", eventForm);
+const eventEndInput = $<HTMLInputElement>("[name='end']", eventForm);
+const eventTimezoneInput = $<HTMLInputElement>("[name='timezone']", eventForm);
+const eventTimeError = $<HTMLElement>("[data-event-time-error]");
+const eventSaveButton = $<HTMLButtonElement>("[data-save-event]");
+const sessionError = $<HTMLElement>("[data-session-error]");
+const confirmation = createConfirmationDialog({
+  dialog: $<HTMLDialogElement>("[data-confirm-dialog]"),
+  title: $<HTMLElement>("[data-confirm-title]"),
+  message: $<HTMLElement>("[data-confirm-message]"),
+  error: $<HTMLElement>("[data-confirm-error]"),
+  cancel: $<HTMLButtonElement>("[data-confirm-cancel]"),
+  confirm: $<HTMLButtonElement>("[data-confirm-submit]"),
+});
+
+interface PersistOutcome {
+  ok: boolean;
+  queued: boolean;
+  message?: string;
+}
 
 function setStatus(kind: "saved" | "saving" | "offline" | "error", message?: string): void {
   window.clearTimeout(statusTimer);
@@ -104,18 +135,28 @@ async function failClosedIfUnauthorized(error: unknown): Promise<boolean> {
   return true;
 }
 
-async function persist(task: () => Promise<void>, success?: string): Promise<void> {
+async function persist(
+  task: () => Promise<void>,
+  success?: string,
+  options: { suppressErrorToast?: boolean } = {},
+): Promise<PersistOutcome> {
+  const queuedBefore = persistence.queuedMutationCount();
   persistence.cacheState(state);
   setStatus(navigator.onLine ? "saving" : "offline");
   try {
     await task();
     setStatus(navigator.onLine ? "saved" : "offline");
     if (success) toast(success);
+    return { ok: true, queued: false };
   } catch (error) {
-    if (await failClosedIfUnauthorized(error)) return;
+    if (await failClosedIfUnauthorized(error)) {
+      return { ok: false, queued: false, message: "Your session is no longer authorized." };
+    }
     const message = error instanceof Error ? error.message : "The change could not be saved.";
+    const queued = persistence.queuedMutationCount() > queuedBefore;
     setStatus(navigator.onLine ? "error" : "offline", message);
-    toast(message, "error");
+    if (!options.suppressErrorToast) toast(message, "error");
+    return { ok: queued, queued, message };
   }
 }
 
@@ -169,19 +210,23 @@ function renderAgenda(): void {
     .filter((event) => !event.deletedAt && Date.parse(event.startAt) <= end && Date.parse(event.endAt) >= start)
     .sort((a, b) => Date.parse(a.startAt) - Date.parse(b.startAt));
   const list = $<HTMLElement>("[data-agenda-list]");
+  const loggedEvents = loggedSourceEventIds(state.sessions);
   if (!events.length) {
     list.innerHTML = `<div class="agenda-empty"><span>Nothing planned</span><p>Keep this day clear or add a focused revision block.</p></div>`;
     return;
   }
   list.innerHTML = events.map((event) => {
     const labels = [event.subjectId, event.classId, event.topicId].map(labelById).filter(Boolean) as StudyLabel[];
+    const logged = loggedEvents.has(event.id);
     return `<article class="agenda-item" style="--event-color:${eventColor(event)}">
       <button type="button" data-agenda-event="${event.id}">
         <span class="agenda-item__time">${event.allDay ? "All day" : `${escapeHtml(formatTime(event.startAt, locale))}–${escapeHtml(formatTime(event.endAt, locale))}`}</span>
         <strong>${escapeHtml(event.title)}</strong>
         <span>${labels.map((label) => escapeHtml(label.name)).join(" · ") || "Revision"}</span>
       </button>
-      <button class="agenda-item__complete" type="button" data-log-event="${event.id}" aria-label="Log ${escapeHtml(event.title)} as revised">✓</button>
+      ${logged
+        ? `<span class="agenda-item__logged" aria-label="Session logged for ${escapeHtml(event.title)}"><span aria-hidden="true">✓</span><span>Logged</span></span>`
+        : `<button class="agenda-item__complete" type="button" data-log-event="${event.id}" aria-label="Log a revision session for ${escapeHtml(event.title)}"><span aria-hidden="true">✓</span><span>Log</span></button>`}
     </article>`;
   }).join("");
 }
@@ -271,21 +316,76 @@ function updateRecurrenceControls(): void {
   weekdays.hidden = frequency !== "weekly";
 }
 
+function validateEventTimeFields(updateDuration = true) {
+  eventStartInput.setCustomValidity("");
+  eventEndInput.setCustomValidity("");
+  eventTimezoneInput.setCustomValidity("");
+  eventStartInput.setAttribute("aria-invalid", "false");
+  eventEndInput.setAttribute("aria-invalid", "false");
+  eventTimezoneInput.setAttribute("aria-invalid", "false");
+
+  const result = validateEventRange(
+    eventStartInput.value,
+    eventEndInput.value,
+    eventTimezoneInput.value,
+  );
+  if (result.valid) {
+    eventTimeError.textContent = "";
+    eventSaveButton.disabled = false;
+    if (updateDuration) eventLastValidDurationMs = result.durationMs;
+    return result;
+  }
+
+  const input = result.field === "start"
+    ? eventStartInput
+    : result.field === "end"
+      ? eventEndInput
+      : eventTimezoneInput;
+  input.setCustomValidity(result.message);
+  input.setAttribute("aria-invalid", "true");
+  eventTimeError.textContent = result.message;
+  eventSaveButton.disabled = true;
+  return undefined;
+}
+
+function reconcileEventEndAfterStart(): void {
+  eventEndInput.value = reconcileEndAfterStart(
+    eventStartInput.value,
+    eventEndInput.value,
+    eventTimezoneInput.value,
+    eventLastValidDurationMs,
+  );
+  validateEventTimeFields();
+}
+
 function openEventDialog(id?: string, date = selectedDate): void {
   activeEventId = id;
   eventForm.reset();
   fillLabelSelects(eventForm);
   const existing = id ? state.events.find((event) => event.id === id) : undefined;
-  const start = existing ? new Date(existing.startAt) : new Date(date);
-  if (!existing) start.setHours(start.getHours() < 8 ? 9 : start.getHours() + 1, 0, 0, 0);
-  const end = existing ? new Date(existing.endAt) : new Date(start.getTime() + 60 * 60_000);
+  const timezone = existing?.timezone ?? state.profile.timezone;
+  let start = DateTime.fromJSDate(date).setZone(timezone);
+  if (!existing) {
+    start = start.set({
+      hour: start.hour < 8 ? 9 : start.hour + 1,
+      minute: 0,
+      second: 0,
+      millisecond: 0,
+    });
+  }
+  const startValue = existing
+    ? toZonedLocalInput(existing.startAt, timezone)
+    : start.toFormat("yyyy-MM-dd'T'HH:mm");
+  const endValue = existing
+    ? toZonedLocalInput(existing.endAt, timezone)
+    : start.plus({ hours: 1 }).toFormat("yyyy-MM-dd'T'HH:mm");
   $("[data-event-dialog-title]").textContent = existing ? "Edit event" : "New event";
   setFormValue(eventForm, "id", existing?.id);
   setFormValue(eventForm, "title", existing?.title);
-  setFormValue(eventForm, "start", toLocalInput(start));
-  setFormValue(eventForm, "end", toLocalInput(end));
+  setFormValue(eventForm, "start", startValue);
+  setFormValue(eventForm, "end", endValue);
   setFormValue(eventForm, "allDay", existing?.allDay ?? false);
-  setFormValue(eventForm, "timezone", existing?.timezone ?? state.profile.timezone);
+  setFormValue(eventForm, "timezone", timezone);
   setFormValue(eventForm, "subjectId", existing?.subjectId);
   setFormValue(eventForm, "classId", existing?.classId);
   setFormValue(eventForm, "topicId", existing?.topicId);
@@ -293,26 +393,25 @@ function openEventDialog(id?: string, date = selectedDate): void {
   setFormValue(eventForm, "recurrenceFrequency", existing?.recurrence?.frequency);
   setFormValue(eventForm, "recurrenceInterval", existing?.recurrence?.interval ?? 1);
   setFormValue(eventForm, "recurrenceUntil", existing?.recurrence?.until);
-  setRecurrenceWeekdays(existing?.recurrence?.byWeekday?.length ? existing.recurrence.byWeekday : [weekdayCode(start)]);
+  setRecurrenceWeekdays(existing?.recurrence?.byWeekday?.length ? existing.recurrence.byWeekday : [weekdayCode(start.toJSDate())]);
   updateRecurrenceControls();
   setFormValue(eventForm, "travelMinutes", existing?.travelMinutes ?? 0);
   setFormValue(eventForm, "alerts", existing?.alerts.join(", ") ?? "15");
   setFormValue(eventForm, "notes", existing?.notes);
   $<HTMLButtonElement>("[data-delete-event]").hidden = !existing;
   $<HTMLButtonElement>("[data-export-event]").hidden = !existing;
+  const initialRange = validateEventTimeFields();
+  eventLastValidDurationMs = initialRange?.durationMs ?? 60 * 60_000;
   eventDialog.showModal();
   window.setTimeout(() => (eventForm.elements.namedItem("title") as HTMLInputElement).focus(), 0);
 }
 
 async function saveEventFromForm(): Promise<void> {
+  const range = validateEventTimeFields();
+  if (!range) return;
   if (!eventForm.reportValidity()) return;
   const data = new FormData(eventForm);
-  const startAt = fromLocalInput(String(data.get("start")));
-  const endAt = fromLocalInput(String(data.get("end")));
-  if (Date.parse(endAt) <= Date.parse(startAt)) {
-    toast("The event must end after it starts.", "error");
-    return;
-  }
+  const { startAt, endAt } = range;
   const existing = activeEventId ? state.events.find((event) => event.id === activeEventId) : undefined;
   const now = isoNow();
   const frequency = String(data.get("recurrenceFrequency") ?? "");
@@ -343,19 +442,40 @@ async function saveEventFromForm(): Promise<void> {
   await persist(() => repository.saveEvent(event), existing ? "Event updated" : "Event added");
 }
 
-async function deleteActiveEvent(): Promise<void> {
+function deleteActiveEvent(trigger?: HTMLElement | null): void {
   const event = state.events.find((item) => item.id === activeEventId);
-  if (!event || !window.confirm(`Move “${event.title}” to the 30-day recovery window?`)) return;
-  event.deletedAt = isoNow();
-  event.updatedAt = isoNow();
-  event.version += 1;
-  eventDialog.close();
-  refreshCalendar();
-  await persist(() => repository.saveEvent(event), "Event removed");
-}
-
-function createStars(name: string, value: number): string {
-  return Array.from({ length: 5 }, (_, index) => index + 1).map((score) => `<label><input type="radio" name="${name}" value="${score}" ${score === value ? "checked" : ""}><span aria-hidden="true">★</span><span class="sr-only">${score} star${score === 1 ? "" : "s"}</span></label>`).join("");
+  if (!event) return;
+  confirmation.open({
+    title: "Remove calendar event?",
+    message: `“${event.title}” will be moved to the 30-day recovery window.`,
+    confirmLabel: "Remove event",
+    trigger,
+    successFocus: $<HTMLButtonElement>("[data-add-event]"),
+    action: async () => {
+      const previous = {
+        deletedAt: event.deletedAt,
+        updatedAt: event.updatedAt,
+        version: event.version,
+      };
+      event.deletedAt = isoNow();
+      event.updatedAt = isoNow();
+      event.version += 1;
+      refreshCalendar();
+      const outcome = await persist(
+        () => repository.saveEvent(event),
+        "Event removed",
+        { suppressErrorToast: true },
+      );
+      if (!outcome.ok) {
+        event.deletedAt = previous.deletedAt;
+        event.updatedAt = previous.updatedAt;
+        event.version = previous.version;
+        refreshCalendar();
+        throw new Error(outcome.message ?? "The event could not be removed.");
+      }
+      eventDialog.close();
+    },
+  });
 }
 
 function openRevisionDialog(id?: string, prefill?: Partial<RevisionItem>): void {
@@ -370,7 +490,11 @@ function openRevisionDialog(id?: string, prefill?: Partial<RevisionItem>): void 
   setFormValue(revisionForm, "classId", item?.classId);
   setFormValue(revisionForm, "topicId", item?.topicId);
   setFormValue(revisionForm, "notes", item?.notes);
-  $<HTMLElement>("[data-revision-rating]").innerHTML = createStars("mastery", item?.mastery ?? 1);
+  revisionRating = mountStarRating($<HTMLElement>("[data-revision-rating]"), {
+    name: "mastery",
+    value: item?.mastery ?? 1,
+    label: "Mastery",
+  });
   revisionDialog.showModal();
 }
 
@@ -379,11 +503,13 @@ async function saveRevisionFromForm(): Promise<void> {
   const data = new FormData(revisionForm);
   const id = String(data.get("id") || "") || uid();
   const existing = state.revisionItems.find((entry) => entry.id === id);
+  const mastery = revisionRating?.value();
+  if (!mastery) return;
   const now = isoNow();
   const item: RevisionItem = {
     id, title: String(data.get("title")).trim(), subjectId: String(data.get("subjectId") || "") || undefined,
     classId: String(data.get("classId") || "") || undefined, topicId: String(data.get("topicId") || "") || undefined,
-    mastery: Number(data.get("mastery") || 1) as RevisionItem["mastery"], notes: String(data.get("notes") || "") || undefined,
+    mastery: mastery as RevisionItem["mastery"], notes: String(data.get("notes") || "") || undefined,
     createdAt: existing?.createdAt ?? now, updatedAt: now,
   };
   const index = state.revisionItems.findIndex((entry) => entry.id === id);
@@ -401,28 +527,51 @@ function openSessionDialog(itemId: string, sourceEventId?: string): void {
   setFormValue(sessionForm, "revisionItemId", itemId);
   setFormValue(sessionForm, "sourceEventId", sourceEventId);
   setFormValue(sessionForm, "revisedAt", toLocalInput(new Date()));
-  setFormValue(sessionForm, "durationMinutes", 45);
+  setFormValue(
+    sessionForm,
+    "durationMinutes",
+    defaultSessionDuration(sourceEventId
+      ? state.events.find((event) => event.id === sourceEventId)
+      : undefined),
+  );
   $("[data-session-item-name]").textContent = item.title;
-  $("[data-session-rating]").innerHTML = createStars("sessionMastery", item.mastery);
+  sessionError.textContent = "";
+  sessionRating = mountStarRating($<HTMLElement>("[data-session-rating]"), {
+    name: "sessionMastery",
+    required: true,
+    errorElement: $<HTMLElement>("[data-session-mastery-error]"),
+    label: "Mastery after this session",
+  });
   sessionDialog.showModal();
 }
 
 async function saveSessionFromForm(): Promise<void> {
+  sessionError.textContent = "";
+  if (!sessionRating?.validate()) return;
   if (!sessionForm.reportValidity()) return;
   const data = new FormData(sessionForm);
   const item = state.revisionItems.find((entry) => entry.id === data.get("revisionItemId"));
   if (!item) return;
+  const sourceEventId = String(data.get("sourceEventId") || "") || undefined;
+  if (sourceEventId && isSourceEventLogged(state.sessions, sourceEventId)) {
+    sessionError.textContent = "This calendar event already has a logged revision session.";
+    renderAgenda();
+    return;
+  }
+  const mastery = sessionRating.value();
+  if (!mastery) return;
   const now = isoNow();
   const session: RevisionSession = {
-    id: uid(), revisionItemId: item.id, sourceEventId: String(data.get("sourceEventId") || "") || undefined,
+    id: uid(), revisionItemId: item.id, sourceEventId,
     revisedAt: fromLocalInput(String(data.get("revisedAt"))), durationMinutes: Number(data.get("durationMinutes")),
-    mastery: Number(data.get("sessionMastery") || item.mastery) as RevisionItem["mastery"], notes: String(data.get("notes") || "") || undefined,
+    mastery: mastery as RevisionItem["mastery"], notes: String(data.get("notes") || "") || undefined,
     createdAt: now, updatedAt: now,
   };
   state.sessions.push(session);
   item.mastery = session.mastery;
   item.updatedAt = now;
   sessionDialog.close();
+  renderAgenda();
   renderRevisionTable();
   await persist(async () => { await repository.saveSession(session); await repository.saveRevisionItem(item); }, "Revision session logged");
 }
@@ -430,6 +579,11 @@ async function saveSessionFromForm(): Promise<void> {
 async function logEvent(eventId: string): Promise<void> {
   const event = state.events.find((entry) => entry.id === eventId);
   if (!event) return;
+  if (isSourceEventLogged(state.sessions, event.id)) {
+    renderAgenda();
+    toast("This calendar event already has a logged revision session.");
+    return;
+  }
   let item = state.revisionItems.find((entry) => (event.topicId && entry.topicId === event.topicId) || entry.title.toLowerCase() === event.title.toLowerCase());
   if (!item) {
     const now = isoNow();
@@ -475,6 +629,41 @@ function renderRevisionTable(): void {
   body.closest("table")!.hidden = items.length === 0;
 }
 
+function deleteRevisionItem(id: string, trigger?: HTMLElement | null): void {
+  const item = state.revisionItems.find((entry) => entry.id === id);
+  if (!item) return;
+  const sessionCount = state.sessions.filter(
+    (session) => session.revisionItemId === item.id,
+  ).length;
+  confirmation.open({
+    title: "Delete revision item?",
+    message: `“${item.title}” and ${sessionCount} logged session${sessionCount === 1 ? "" : "s"} will be permanently deleted.`,
+    confirmLabel: "Delete revision item",
+    trigger,
+    successFocus: $<HTMLButtonElement>("[data-add-revision]"),
+    action: async () => {
+      const previousItems = state.revisionItems;
+      const previousSessions = state.sessions;
+      state.revisionItems = state.revisionItems.filter((entry) => entry.id !== item.id);
+      state.sessions = state.sessions.filter((session) => session.revisionItemId !== item.id);
+      renderAgenda();
+      renderRevisionTable();
+      const outcome = await persist(
+        () => repository.deleteRevisionItem(item.id),
+        "Revision item deleted",
+        { suppressErrorToast: true },
+      );
+      if (!outcome.ok) {
+        state.revisionItems = previousItems;
+        state.sessions = previousSessions;
+        renderAgenda();
+        renderRevisionTable();
+        throw new Error(outcome.message ?? "The revision item could not be deleted.");
+      }
+    },
+  });
+}
+
 function renderLabelManager(): void {
   const manager = $<HTMLElement>("[data-label-manager]");
   manager.innerHTML = (["subject", "class", "topic"] as LabelKind[]).map((kind) => {
@@ -508,22 +697,41 @@ async function saveLabel(id: string): Promise<void> {
   await persist(() => repository.saveLabel(label), "Label updated");
 }
 
-async function deleteLabel(id: string): Promise<void> {
+function deleteLabel(id: string, trigger?: HTMLElement | null): void {
   const label = labelById(id);
-  if (!label || !window.confirm(`Delete the ${label.kind} “${label.name}”? Existing entries will become unlabelled.`)) return;
-  state.labels = state.labels.filter((entry) => entry.id !== id);
-  for (const event of state.events) {
-    if (event.subjectId === id) event.subjectId = undefined;
-    if (event.classId === id) event.classId = undefined;
-    if (event.topicId === id) event.topicId = undefined;
-  }
-  for (const item of state.revisionItems) {
-    if (item.subjectId === id) item.subjectId = undefined;
-    if (item.classId === id) item.classId = undefined;
-    if (item.topicId === id) item.topicId = undefined;
-  }
-  renderLabelManager(); fillLabelSelects(); refreshCalendar(); renderRevisionTable();
-  await persist(() => repository.deleteLabel(id), "Label deleted");
+  if (!label) return;
+  confirmation.open({
+    title: `Delete ${label.kind}?`,
+    message: `“${label.name}” will be deleted. Existing events and revision items using it will become unlabelled.`,
+    confirmLabel: "Delete label",
+    trigger,
+    successFocus: $<HTMLButtonElement>("[data-add-label]"),
+    action: async () => {
+      const previousState = structuredClone(state);
+      state.labels = state.labels.filter((entry) => entry.id !== id);
+      for (const event of state.events) {
+        if (event.subjectId === id) event.subjectId = undefined;
+        if (event.classId === id) event.classId = undefined;
+        if (event.topicId === id) event.topicId = undefined;
+      }
+      for (const item of state.revisionItems) {
+        if (item.subjectId === id) item.subjectId = undefined;
+        if (item.classId === id) item.classId = undefined;
+        if (item.topicId === id) item.topicId = undefined;
+      }
+      renderLabelManager(); fillLabelSelects(); refreshCalendar(); renderRevisionTable();
+      const outcome = await persist(
+        () => repository.deleteLabel(id),
+        "Label deleted",
+        { suppressErrorToast: true },
+      );
+      if (!outcome.ok) {
+        state = previousState;
+        renderLabelManager(); fillLabelSelects(); refreshCalendar(); renderRevisionTable();
+        throw new Error(outcome.message ?? "The label could not be deleted.");
+      }
+    },
+  });
 }
 
 function exportEvents(events: CalendarEventRecord[], filename: string): void {
@@ -636,7 +844,6 @@ function initializeInteractions(): void {
     await persist(() => repository.saveProfile(state.profile));
   }));
   $("[data-add-event]").addEventListener("click", () => openEventDialog());
-  $("[data-agenda-add]").addEventListener("click", () => openEventDialog(undefined, selectedDate));
   $("[data-add-revision]").addEventListener("click", () => openRevisionDialog());
   $("[data-empty-add-revision]").addEventListener("click", () => openRevisionDialog());
   $("[data-manage-labels]").addEventListener("click", () => { renderLabelManager(); labelDialog.showModal(); });
@@ -644,13 +851,18 @@ function initializeInteractions(): void {
   $("[data-open-privacy]").addEventListener("click", () => privacyDialog.showModal());
   $("[data-export-all]").addEventListener("click", () => exportEvents(state.events.filter((event) => !event.deletedAt), "revision-tracker.ics"));
   $("[data-save-event]").addEventListener("click", (event) => { event.preventDefault(); void saveEventFromForm(); });
-  $("[data-delete-event]").addEventListener("click", () => void deleteActiveEvent());
+  $("[data-delete-event]").addEventListener("click", (event) => deleteActiveEvent(event.currentTarget as HTMLElement));
   $("[data-export-event]").addEventListener("click", () => { const item = state.events.find((event) => event.id === activeEventId); if (item) exportEvents([item], `${item.title.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}.ics`); });
   $("[data-save-revision]").addEventListener("click", (event) => { event.preventDefault(); void saveRevisionFromForm(); });
   $("[data-save-session]").addEventListener("click", (event) => { event.preventDefault(); void saveSessionFromForm(); });
   $("[data-add-label]").addEventListener("click", (event) => { event.preventDefault(); void addLabelFromForm(); });
   $("[data-save-settings]").addEventListener("click", (event) => { event.preventDefault(); void saveSettings(); });
   $("[data-recurrence-frequency]").addEventListener("change", updateRecurrenceControls);
+  eventStartInput.addEventListener("input", () => validateEventTimeFields(false));
+  eventStartInput.addEventListener("change", reconcileEventEndAfterStart);
+  eventEndInput.addEventListener("input", () => validateEventTimeFields());
+  eventTimezoneInput.addEventListener("change", () => validateEventTimeFields());
+  $<HTMLInputElement>("[name='allDay']", eventForm).addEventListener("change", () => validateEventTimeFields());
   $("[data-revision-search]").addEventListener("input", renderRevisionTable);
   $("[data-revision-filter]").addEventListener("change", renderRevisionTable);
   $("[data-revision-sort]").addEventListener("change", renderRevisionTable);
@@ -673,28 +885,32 @@ function initializeInteractions(): void {
       const item = state.revisionItems.find((entry) => entry.id === mastery.dataset.setMastery);
       if (item) { item.mastery = Number(mastery.dataset.score) as RevisionItem["mastery"]; item.updatedAt = isoNow(); renderRevisionTable(); void persist(() => repository.saveRevisionItem(item)); }
     }
-    if (remove) {
-      const item = state.revisionItems.find((entry) => entry.id === remove.dataset.deleteRevision);
-      if (item && window.confirm(`Delete “${item.title}” and its session history?`)) {
-        state.revisionItems = state.revisionItems.filter((entry) => entry.id !== item.id);
-        state.sessions = state.sessions.filter((session) => session.revisionItemId !== item.id);
-        renderRevisionTable(); void persist(() => repository.deleteRevisionItem(item.id), "Revision item deleted");
-      }
-    }
+    if (remove) deleteRevisionItem(remove.dataset.deleteRevision!, remove);
   });
   $("[data-label-manager]").addEventListener("click", (event) => {
     const target = event.target as HTMLElement;
     const save = target.closest<HTMLElement>("[data-save-label]");
     const remove = target.closest<HTMLElement>("[data-delete-label]");
     if (save) void saveLabel(save.dataset.saveLabel!);
-    if (remove) void deleteLabel(remove.dataset.deleteLabel!);
+    if (remove) deleteLabel(remove.dataset.deleteLabel!, remove);
   });
   $("[data-auth-button]").addEventListener("click", openSettings);
   $("[data-settings-account]").addEventListener("click", async (event) => {
     const target = event.target as HTMLElement;
     if (target.closest("[data-sign-out]")) { settingsDialog.close(); await persistence.signOut(); }
-    if (target.closest("[data-delete-account]") && window.confirm("Permanently delete your account and all tracker data? This cannot be undone.")) {
-      try { await persistence.deleteAccount(); settingsDialog.close(); toast("Account deleted"); } catch (error) { toast(error instanceof Error ? error.message : "Account deletion failed.", "error"); }
+    const deleteAccount = target.closest<HTMLElement>("[data-delete-account]");
+    if (deleteAccount) {
+      confirmation.open({
+        title: "Delete your account?",
+        message: "Your account and all tracker data will be permanently deleted. This cannot be undone.",
+        confirmLabel: "Delete account",
+        trigger: deleteAccount,
+        action: async () => {
+          await persistence.deleteAccount();
+          settingsDialog.close();
+          toast("Account deleted");
+        },
+      });
     }
   });
   $("[data-legacy-import]").addEventListener("click", () => void importLegacyData());
@@ -703,11 +919,19 @@ function initializeInteractions(): void {
     legacyDialog.close();
     toast("Legacy data kept separately on this device");
   });
-  $("[data-legacy-discard]").addEventListener("click", () => {
-    if (!window.confirm("Permanently discard the old local tracker data from this device?")) return;
-    persistence.discardLegacy();
-    legacyDialog.close();
-    toast("Legacy browser data discarded");
+  $("[data-legacy-discard]").addEventListener("click", (event) => {
+    confirmation.open({
+      title: "Discard old local data?",
+      message: "The old tracker data stored only on this device will be permanently discarded.",
+      confirmLabel: "Discard local data",
+      trigger: event.currentTarget as HTMLElement,
+      successFocus: $<HTMLButtonElement>("[data-add-event]"),
+      action: () => {
+        persistence.discardLegacy();
+        legacyDialog.close();
+        toast("Legacy browser data discarded");
+      },
+    });
   });
   retryButton.addEventListener("click", () => void flushQueuedChanges());
   window.addEventListener("online", () => void flushQueuedChanges());

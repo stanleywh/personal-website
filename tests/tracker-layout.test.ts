@@ -54,4 +54,26 @@ describe("initial calendar layout", () => {
     expect(shell?.hidden).toBe(true);
     expect(skipLink?.closest("[data-tracker-shell]")).toBe(shell);
   });
+
+  it("keeps one labelled add-event action and includes inline validation and confirmation UI", () => {
+    const html = readFileSync(resolve("tracker/index.html"), "utf8");
+    const source = readFileSync(resolve("src/tracker/main.ts"), "utf8");
+    const parsed = new DOMParser().parseFromString(html, "text/html");
+
+    expect(parsed.querySelectorAll("[data-add-event]")).toHaveLength(1);
+    expect(parsed.querySelector("[data-agenda-add]")).toBeNull();
+    expect(parsed.querySelector("[data-event-time-error]")).not.toBeNull();
+    expect(parsed.querySelector("[data-session-mastery-error]")).not.toBeNull();
+    expect(parsed.querySelector("[data-confirm-dialog]")).not.toBeNull();
+    expect(source).not.toContain("window.confirm");
+    for (const label of [
+      "Remove event",
+      "Delete revision item",
+      "Delete label",
+      "Delete account",
+      "Discard local data",
+    ]) {
+      expect(source).toContain(label);
+    }
+  });
 });
