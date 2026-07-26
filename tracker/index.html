@@ -8,17 +8,18 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css">
   <link rel="stylesheet" href="/src/tracker/auth-gate.css">
   <script type="module" src="/src/tracker/entry.ts"></script>
 </head>
-<body class="tracker">
+<body class="tracker site-page">
   <div class="tracker-auth-guard" data-tracker-guard data-state="pending" role="status" aria-live="polite" aria-atomic="true" aria-busy="true">
     <span class="tracker-auth-guard__spinner" aria-hidden="true"></span>
     <p data-tracker-guard-message>Checking your account…</p>
     <a href="/account/?mode=login&amp;next=tracker">Go to login</a>
   </div>
 
-  <div class="tracker-shell" data-tracker-shell hidden>
+  <div class="tracker-shell page-shell page-shell--tracker" data-tracker-shell hidden>
     <a class="skip-link" href="#calendar">Skip to calendar</a>
     <header class="tracker-header reveal" style="--reveal-order: 0">
       <a class="back-link" href="/" aria-label="Back to home">
@@ -29,7 +30,7 @@
         <h1>Revision Tracker</h1>
       </div>
       <div class="account-actions">
-        <div class="status-strip reveal" style="--reveal-order: 1" role="status" aria-live="polite">
+        <div class="status-strip status-control reveal" style="--reveal-order: 1" role="status" aria-live="polite">
           <span class="status-dot" data-status-dot></span>
           <span data-status-text>Saved on this device</span>
           <button class="status-action" type="button" data-retry-sync hidden>Retry</button>
@@ -42,7 +43,7 @@
     </header>
 
     <main>
-      <section class="calendar-card reveal" style="--reveal-order: 2" aria-labelledby="calendar-title">
+      <section class="calendar-card surface-card reveal" style="--reveal-order: 2" aria-labelledby="calendar-title">
         <div class="calendar-toolbar">
           <div>
             <p class="section-kicker">Calendar</p>
@@ -83,7 +84,7 @@
         </div>
       </section>
 
-      <section class="revision-card reveal" style="--reveal-order: 3" aria-labelledby="revision-title">
+      <section class="revision-card surface-card reveal" style="--reveal-order: 3" aria-labelledby="revision-title">
         <div class="section-header">
           <div>
             <p class="section-kicker">Progress</p>

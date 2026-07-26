@@ -1,28 +1,7 @@
-:root {
-  color-scheme: light;
-  font-family: "Manrope", "Segoe UI", sans-serif;
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-}
-
-* { box-sizing: border-box; }
 html { min-height: 100%; }
 .tracker [hidden] { display: none !important; }
 
 .tracker {
-  --background: #eee8dc;
-  --surface: #f8f4eb;
-  --surface-strong: #fffdf8;
-  --surface-muted: #e9e1d3;
-  --text: #2f2a24;
-  --muted: #7d7469;
-  --faint: #aaa093;
-  --border: rgba(63, 54, 43, 0.14);
-  --border-strong: rgba(63, 54, 43, 0.24);
-  --accent: #78634b;
-  --accent-dark: #5e4c39;
-  --danger: #9a5348;
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
@@ -31,6 +10,9 @@ html { min-height: 100%; }
     radial-gradient(circle at 92% 3%, rgba(255, 253, 246, 0.78), transparent 32rem),
     var(--background);
   color: var(--text);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
 }
 
 .tracker-auth-guard {

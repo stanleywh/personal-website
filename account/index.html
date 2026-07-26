@@ -11,15 +11,15 @@
   <link rel="stylesheet" href="/styles.css">
   <script type="module" src="/src/account/main.ts"></script>
 </head>
-<body class="home account-page">
-  <main class="account-shell">
+<body class="home site-page account-page">
+  <main class="account-shell page-shell page-shell--account">
     <a class="account-back" href="/">← Home</a>
-    <section class="account-card" aria-labelledby="account-title">
+    <section class="account-card surface-card" aria-labelledby="account-title">
       <p class="account-kicker">Your account</p>
       <h1 id="account-title" data-account-title>Welcome back</h1>
       <p class="account-intro" data-account-intro>Enter your email address and password.</p>
 
-      <div class="account-tabs" data-account-tabs role="group" aria-label="Account action">
+      <div class="account-tabs segmented" data-account-tabs role="group" aria-label="Account action">
         <button type="button" data-mode="login" aria-pressed="true">Log in</button>
         <button type="button" data-mode="signup" aria-pressed="false">Sign up</button>
       </div>
@@ -27,19 +27,19 @@
       <form class="account-form" data-account-form>
         <label class="account-field" data-display-field hidden>
           <span>Display name</span>
-          <input name="displayName" maxlength="50" autocomplete="name" placeholder="Stanley">
+          <input class="form-control" name="displayName" maxlength="50" autocomplete="name" placeholder="Stanley">
         </label>
         <label class="account-field" data-email-field>
           <span>Email address</span>
-          <input name="email" type="email" autocomplete="email" placeholder="you@example.com">
+          <input class="form-control" name="email" type="email" autocomplete="email" placeholder="you@example.com">
         </label>
         <label class="account-field" data-password-field hidden>
           <span>Password</span>
-          <input name="password" type="password" autocomplete="current-password">
+          <input class="form-control" name="password" type="password" autocomplete="current-password">
         </label>
         <label class="account-field" data-confirm-password-field hidden>
           <span>Confirm password</span>
-          <input name="confirmPassword" type="password" autocomplete="new-password">
+          <input class="form-control" name="confirmPassword" type="password" autocomplete="new-password">
         </label>
         <p class="account-password-hint" data-password-hint hidden>
           Use at least 8 characters, including uppercase, lowercase, a number, and a symbol.
@@ -49,7 +49,7 @@
           Previously used an email login link? Use Forgot password to set a password.
         </p>
         <p class="account-message" data-account-message aria-live="polite"></p>
-        <button class="account-submit" type="submit" data-account-submit>Log in</button>
+        <button class="account-submit button button--primary" type="submit" data-account-submit>Log in</button>
         <button class="account-text-action" type="button" data-login-return hidden>Back to login</button>
         <a class="account-text-action" href="/account/?mode=forgot-password" data-recovery-retry hidden>Request a new reset link</a>
       </form>
@@ -62,10 +62,10 @@
           </div>
           <label class="account-field">
             <span>Display name</span>
-            <input name="profileDisplayName" maxlength="50" autocomplete="name" required placeholder="Stanley">
+            <input class="form-control" name="profileDisplayName" maxlength="50" autocomplete="name" required placeholder="Stanley">
           </label>
           <p class="account-message" data-display-name-message aria-live="polite"></p>
-          <button class="account-submit" type="submit" data-save-display-name>Save display name</button>
+          <button class="account-submit button button--primary" type="submit" data-save-display-name>Save display name</button>
         </form>
 
         <form class="account-settings__section" data-change-password-form>
@@ -75,14 +75,14 @@
           </div>
           <label class="account-field">
             <span>New password</span>
-            <input name="settingsPassword" type="password" autocomplete="new-password" required>
+            <input class="form-control" name="settingsPassword" type="password" autocomplete="new-password" required>
           </label>
           <label class="account-field">
             <span>Confirm new password</span>
-            <input name="settingsConfirmPassword" type="password" autocomplete="new-password" required>
+            <input class="form-control" name="settingsConfirmPassword" type="password" autocomplete="new-password" required>
           </label>
           <p class="account-message" data-change-password-message aria-live="polite"></p>
-          <button class="account-submit" type="submit" data-change-password>Change password</button>
+          <button class="account-submit button button--primary" type="submit" data-change-password>Change password</button>
         </form>
 
         <div class="account-settings__section account-settings__section--quiet">
@@ -105,7 +105,7 @@
 
       <section class="account-recovery-success" data-recovery-success hidden aria-live="polite">
         <p>Your password has been updated and this recovery session has been signed out.</p>
-        <a class="account-submit" href="/account/?mode=login" data-recovery-login>Return to login</a>
+        <a class="account-submit button button--primary" href="/account/?mode=login" data-recovery-login>Return to login</a>
       </section>
     </section>
   </main>

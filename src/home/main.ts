@@ -15,11 +15,11 @@ function renderSignedOut(message?: string): void {
   if (heading) heading.textContent = "Stanley";
   if (account) {
     const login = document.createElement("a");
-    login.className = "home-account__link";
+    login.className = "home-account__link button button--quiet";
     login.href = accountUrl("login", "home").toString();
     login.textContent = "Log in";
     const signup = document.createElement("a");
-    signup.className = "home-account__link home-account__link--primary";
+    signup.className = "home-account__link home-account__link--primary button button--primary";
     signup.href = accountUrl("signup", "home").toString();
     signup.textContent = "Sign up";
     account.replaceChildren(login, signup);
@@ -36,11 +36,11 @@ function renderSignedIn(displayName: string): void {
   if (heading) heading.textContent = displayName;
   if (account) {
     const profile = document.createElement("a");
-    profile.className = "home-account__link";
+    profile.className = "home-account__link button button--quiet";
     profile.href = accountUrl("profile", "home").toString();
     profile.textContent = "Profile";
     const logout = document.createElement("button");
-    logout.className = "home-account__link";
+    logout.className = "home-account__link button button--quiet";
     logout.type = "button";
     logout.textContent = "Log out";
     account.replaceChildren(profile, logout);
