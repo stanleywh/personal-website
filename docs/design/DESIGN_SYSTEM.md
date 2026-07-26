@@ -138,6 +138,54 @@ The homepage directory card is the primary navigation pattern. Interior pages
 use the existing back link and page-level actions. Do not restore Finance or
 Projects unless a separate product change explicitly adds them.
 
+## Scrolling and overflow
+
+The document is the default scrolling surface. Create an internal scroll
+container only when a component has a deliberate height boundary and its
+overflow must remain reachable without expanding the page, such as the timed
+calendar grid or a viewport-constrained modal. Use `overflow: auto` so a
+scrollbar appears only when content exceeds that boundary. Do not add overflow
+to cards, panels, or page shells merely to make them potential scrollers, and
+avoid nested scrolling when normal page flow is sufficient.
+
+Desktop scrollbars use the following shared tokens:
+
+| Token | Value | Purpose |
+| --- | --- | --- |
+| `--scrollbar-desktop-size` | `8px` | Native scrollbar width and height on fine-pointer devices |
+| `--scrollbar-track` | `transparent` | Keeps the underlying surface visible |
+| `--scrollbar-thumb` | `rgba(125, 116, 105, .46)` | Discoverable neutral thumb at rest |
+| `--scrollbar-thumb-hover` | `rgba(125, 116, 105, .62)` | Stronger pointer-hover state |
+| `--scrollbar-thumb-active` | `rgba(94, 76, 57, .76)` | Strongest drag/active state |
+
+Firefox receives `scrollbar-width: thin` and `scrollbar-color`. Chromium,
+Edge, and Safari use native WebKit scrollbar pseudo-elements with an
+eight-pixel channel, a rounded thumb, transparent track and corner, and no
+visible arrow buttons. Styling is global because it does not create overflow
+and because FullCalendar measures a temporary native scroller to align its
+columns. Mobile and coarse-pointer devices keep their platform-native overlay
+and momentum behavior. Forced-colour mode reverts the custom parts and colours
+so the operating system can provide an operable high-contrast scrollbar.
+
+Scrollbar visibility must not depend on hover: the resting thumb remains
+visible. Native scrolling, wheel and trackpad input, touch momentum, keyboard
+navigation, and browser zoom must continue to work. Do not replace native
+scrolling with JavaScript, fake tracks, or hidden scrollbars.
+
+FullCalendar has a deliberate exception. Its Week and Day timed grid remains
+internally scrollable through the full day. The non-liquid all-day section uses
+`overflow-y: auto` and a `--calendar-all-day-max-height` of 120px on compact
+layouts and 96px at the desktop-density breakpoint, so empty and fitting rows
+show no scrollbar while genuine event overflow remains reachable. FullCalendar
+still reserves the measured scrollbar width across its header, all-day, and
+timed sections; that transparent compensation is required to keep the final
+day column aligned. Month cell minimum heights apply only to Month view.
+
+Apply these conventions to future sidebars, lists, tables, modal bodies, and
+panels only after defining the component's intended height boundary. Test both
+fitting and overflowing content, mouse and keyboard scrolling, touch behavior,
+forced colours, supported responsive widths, and browser zoom above 100%.
+
 ## Responsive and accessibility rules
 
 - Never use CSS `zoom`, whole-application transforms, JavaScript browser-scale
@@ -157,6 +205,9 @@ Projects unless a separate product change explicitly adds them.
 - FullCalendar height is controlled by `--calendar-height`: the existing
   `clamp(560px, 72vh, 720px)` on compact layouts and
   `clamp(448px, 72vh, 576px)` on desktop.
+- The timed grid is intentionally scrollable. The all-day area scrolls only
+  when its events exceed `--calendar-all-day-max-height`; preserve the shared
+  scrollbar-width compensation that aligns its columns with the header.
 - Month cells use a 74px desktop minimum; Week and Day keep readable slot
   heights.
 - The selected-day agenda is 196px wide on desktop and stacks below 1024px.

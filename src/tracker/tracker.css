@@ -48,7 +48,7 @@
 .fc .fc-col-header-cell-cushion, .fc .fc-daygrid-day-number { color: inherit; text-decoration: none; }
 .fc .fc-daygrid-day-number { min-width: 25px; height: 25px; margin: 5px 6px 0 0; padding: 0; display: inline-grid; place-items: center; border-radius: 50%; font-size: .72rem; font-weight: 600; }
 .fc .fc-day-today .fc-daygrid-day-number { background: var(--accent); color: white; box-shadow: 0 3px 9px rgba(120, 99, 75, .24); }
-.fc .fc-daygrid-day-frame { min-height: 92px; }
+.fc .fc-dayGridMonth-view .fc-daygrid-day-frame { min-height: 92px; }
 .fc .fc-day-other { background: rgba(238, 232, 220, .2); color: var(--faint); }
 .fc .fc-event { margin: 1px 4px; padding: 2px 5px; border-radius: 5px; border: 0; font-size: .65rem; cursor: pointer; }
 .fc .fc-daygrid-event-dot { display: none; }
@@ -57,6 +57,20 @@
 .fc .fc-timegrid-now-indicator-line { border-width: 1.5px; }
 .fc .fc-timegrid-now-indicator-arrow { border-width: 5px; }
 .fc .fc-more-link { color: var(--accent-dark); font-weight: 700; }
+
+/*
+ * FullCalendar forces overflow-y: scroll inline across aligned time-grid
+ * sections when the liquid timed body needs a scrollbar. Keep its measured
+ * width compensation, but let the non-liquid all-day section show a native
+ * scrollbar only when its events exceed the intended height.
+ */
+.tracker #calendar
+  .fc-timegrid
+  .fc-scrollgrid-section-body:not(.fc-scrollgrid-section-liquid)
+  .fc-scroller {
+  max-height: var(--calendar-all-day-max-height);
+  overflow-y: auto !important;
+}
 
 .agenda { min-height: 350px; padding-left: 22px; border-left: 1px solid var(--border); }
 .agenda__header { min-height: 45px; margin-bottom: 18px; display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
@@ -310,7 +324,7 @@ td small { max-width: 270px; margin-top: 3px; display: block; overflow: hidden; 
     font-size: 0.63rem;
   }
 
-  .fc .fc-daygrid-day-frame {
+  .fc .fc-dayGridMonth-view .fc-daygrid-day-frame {
     min-height: 74px;
   }
 
@@ -770,7 +784,7 @@ td small { max-width: 270px; margin-top: 3px; display: block; overflow: hidden; 
   .segmented button { flex: 1; }
   .calendar-toolbar__actions .button--primary { margin-left: 0; }
   .fc { font-size: .68rem; }
-  .fc .fc-daygrid-day-frame { min-height: 65px; }
+  .fc .fc-dayGridMonth-view .fc-daygrid-day-frame { min-height: 65px; }
   .fc .fc-col-header-cell { font-size: .57rem; }
   .fc .fc-daygrid-day-number { margin-right: 3px; }
   .fc .fc-daygrid-event { padding: 1px 3px; }
