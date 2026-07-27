@@ -67,6 +67,31 @@ describe("shared scrollbar system", () => {
 });
 
 describe("FullCalendar overflow contract", () => {
+  it("keeps the calendar card out of fixed-position containing blocks", () => {
+    const calendarCardRules = [...trackerStyles.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+      .filter(([, selector]) =>
+        selector.includes(".calendar-card")
+        && !selector.includes(":not(.calendar-card)"))
+      .map(([, selector, declarations]) => ({
+        selector: selector.trim(),
+        declarations,
+      }));
+
+    expect(calendarCardRules.length).toBeGreaterThan(0);
+    for (const rule of calendarCardRules) {
+      expect(rule.declarations, rule.selector).not.toMatch(
+        /(?:^|;)\s*(?:backdrop-filter|filter|perspective|contain)\s*:/,
+      );
+      const transform = rule.declarations.match(
+        /(?:^|;)\s*transform\s*:\s*([^;]+)/,
+      )?.[1].trim();
+      expect([undefined, "none"], rule.selector).toContain(transform);
+    }
+    expect(trackerStyles).toContain(
+      ".js .tracker .reveal:not(.calendar-card)",
+    );
+  });
+
   it("limits Month cell height rules to Month view", () => {
     expect(trackerStyles).not.toMatch(
       /(?<!dayGridMonth-view )\.fc-daygrid-day-frame\s*\{/,
@@ -102,6 +127,26 @@ describe("FullCalendar overflow contract", () => {
     expect(trackerSource).toContain('slotMinTime: "00:00:00"');
     expect(trackerSource).toContain('slotMaxTime: "24:00:00"');
     expect(trackerSource).toContain('scrollTime: "00:00:00"');
+  });
+
+  it("keeps native drag, resize, and snap behavior configured", () => {
+    expect(trackerSource).toContain(
+      "slotDuration: { minutes: CALENDAR_SNAP_MINUTES }",
+    );
+    expect(trackerSource).toContain(
+      "snapDuration: { minutes: CALENDAR_SNAP_MINUTES }",
+    );
+    expect(trackerSource).toContain("select: (info: DateSelectArg)");
+    expect(trackerSource).toContain("eventDrop: (info: EventDropArg)");
+    expect(trackerSource).toContain("eventResize: (info: EventResizeDoneArg)");
+    expect(trackerSource).toContain(
+      'addEventListener("change", handleAllDayChange)',
+    );
+    expect(trackerSource).toContain(
+      "addDefaultEventDuration(new Date(startAt))",
+    );
+    expect(trackerSource).not.toContain("fixedMirrorParent");
+    expect(trackerSource).not.toContain("mousemove");
   });
 });
 

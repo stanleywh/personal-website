@@ -126,6 +126,16 @@ surface, border, radius, and shadow, use a constrained viewport height, and
 become nearly full-width on mobile. Keep destructive confirmation in the
 existing in-app confirmation dialog rather than `window.confirm`.
 
+### Popovers
+
+Popovers use an opaque elevated surface with the shared border, radius, and
+dialog shadow so underlying controls never show through. Keep the title and a
+real close button aligned in a distinct header, use a responsive width that
+stays within the viewport, and scroll only the body when a deliberate maximum
+height is genuinely exceeded. Overflowing bodies inherit the shared native
+scrollbar treatment. Calendar event rows show one title; all-day events omit
+time, while timed events show at most one visually distinct time label.
+
 ### Segmented and status controls
 
 Use `.segmented` for mutually exclusive compact choices and keep
@@ -214,8 +224,10 @@ forced colours, supported responsive widths, and browser zoom above 100%.
 - The render-after-auth sequence and post-reveal `calendar.updateSize()` call
   are required. Do not render the calendar in the hidden shell without the
   follow-up size update.
-- Do not apply transforms to the calendar or its application shell: pointer
-  coordinates must remain accurate for selection, dragging, and resizing.
+- Do not apply transforms, filters, backdrop filters, perspective, or paint
+  containment to the calendar card or its ancestors: FullCalendar's fixed drag
+  mirror must keep viewport coordinates accurate for selection, dragging, and
+  resizing.
 - Event and label colours may vary because they are user data, but surrounding
   controls use the shared palette.
 

@@ -1,4 +1,11 @@
-import { Calendar, type CalendarOptions, type EventClickArg, type EventDropArg, type EventInput } from "@fullcalendar/core";
+import {
+  Calendar,
+  type CalendarOptions,
+  type DateSelectArg,
+  type EventClickArg,
+  type EventDropArg,
+  type EventInput,
+} from "@fullcalendar/core";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import interactionPlugin, { type DateClickArg, type EventResizeDoneArg } from "@fullcalendar/interaction";
 import luxonPlugin from "@fullcalendar/luxon3";
@@ -6,7 +13,17 @@ import rrulePlugin from "@fullcalendar/rrule";
 import timeGridPlugin from "@fullcalendar/timegrid";
 import { DateTime } from "luxon";
 import { accountUrl, navigateTo } from "../auth/navigation";
+import { attachCalendarPopoverEnhancements } from "./calendar-popover";
 import { createConfirmationDialog } from "./confirmation-dialog";
+import {
+  addDefaultEventDuration,
+  CALENDAR_SNAP_MINUTES,
+  calendarPointDefaults,
+  calendarSelectionDefaults,
+  type EventCreationDefaults,
+  resolveEventDialogTiming,
+  toolbarEventDefaults,
+} from "./event-defaults";
 import "./tracker.css";
 import { revealTrackerAndUpdateCalendar } from "./layout";
 import { mountStarRating, type StarRatingController } from "./rating";
@@ -26,6 +43,7 @@ import {
   formatDate,
   formatTime,
   fromLocalInput,
+  fromZonedLocalInput,
   getLastRevised,
   isoNow,
   isSourceEventLogged,
@@ -245,6 +263,8 @@ function fullCalendarOptions(): CalendarOptions {
     editable: true,
     selectable: true,
     dayMaxEvents: 3,
+    slotDuration: { minutes: CALENDAR_SNAP_MINUTES },
+    snapDuration: { minutes: CALENDAR_SNAP_MINUTES },
     slotMinTime: "00:00:00",
     slotMaxTime: "24:00:00",
     scrollTime: "00:00:00",
@@ -253,9 +273,28 @@ function fullCalendarOptions(): CalendarOptions {
     dateClick: (info: DateClickArg) => {
       selectedDate = info.date;
       renderAgenda();
-      if (calendar.view.type === "dayGridMonth" && info.jsEvent.detail > 1) openEventDialog(undefined, info.date);
+      const creation = calendarPointDefaults(
+        info.date,
+        info.allDay,
+        state.profile.timezone,
+      );
+      if (calendar.view.type === "dayGridMonth") {
+        if (info.jsEvent.detail > 1) openEventDialog({ creation });
+      } else {
+        openEventDialog({ creation });
+      }
     },
-    eventClick: (info: EventClickArg) => openEventDialog(info.event.extendedProps.recordId ?? info.event.id),
+    select: (info: DateSelectArg) => {
+      selectedDate = info.start;
+      renderAgenda();
+      calendar.unselect();
+      openEventDialog({
+        creation: calendarSelectionDefaults(info.start, info.end, info.allDay),
+      });
+    },
+    eventClick: (info: EventClickArg) => openEventDialog({
+      id: info.event.extendedProps.recordId ?? info.event.id,
+    }),
     eventDrop: (info: EventDropArg) => updateEventDates(info.event.extendedProps.recordId ?? info.event.id, info.event.start, info.event.end, info.event.allDay),
     eventResize: (info: EventResizeDoneArg) => updateEventDates(info.event.extendedProps.recordId ?? info.event.id, info.event.start, info.event.end, info.event.allDay),
     datesSet: (info: { view: { title: string; type: string } }) => {
@@ -358,33 +397,55 @@ function reconcileEventEndAfterStart(): void {
   validateEventTimeFields();
 }
 
-function openEventDialog(id?: string, date = selectedDate): void {
+function handleAllDayChange(): void {
+  const allDayInput = $<HTMLInputElement>("[name='allDay']", eventForm);
+  if (!allDayInput.checked) {
+    const startAt = fromZonedLocalInput(
+      eventStartInput.value,
+      eventTimezoneInput.value,
+    );
+    if (startAt) {
+      eventEndInput.value = toZonedLocalInput(
+        addDefaultEventDuration(new Date(startAt)),
+        eventTimezoneInput.value,
+      );
+      eventLastValidDurationMs = 60 * 60_000;
+    }
+  }
+  validateEventTimeFields();
+}
+
+interface OpenEventDialogOptions {
+  id?: string;
+  creation?: EventCreationDefaults;
+}
+
+function openEventDialog(options: OpenEventDialogOptions = {}): void {
+  const { id, creation } = options;
   activeEventId = id;
   eventForm.reset();
   fillLabelSelects(eventForm);
   const existing = id ? state.events.find((event) => event.id === id) : undefined;
-  const timezone = existing?.timezone ?? state.profile.timezone;
-  let start = DateTime.fromJSDate(date).setZone(timezone);
-  if (!existing) {
-    start = start.set({
-      hour: start.hour < 8 ? 9 : start.hour + 1,
-      minute: 0,
-      second: 0,
-      millisecond: 0,
-    });
-  }
-  const startValue = existing
-    ? toZonedLocalInput(existing.startAt, timezone)
-    : start.toFormat("yyyy-MM-dd'T'HH:mm");
-  const endValue = existing
-    ? toZonedLocalInput(existing.endAt, timezone)
-    : start.plus({ hours: 1 }).toFormat("yyyy-MM-dd'T'HH:mm");
+  const proposedCreation = creation ?? toolbarEventDefaults(
+    selectedDate,
+    new Date(),
+    state.profile.timezone,
+  );
+  const timing = resolveEventDialogTiming(
+    existing,
+    proposedCreation,
+    state.profile.timezone,
+  );
+  const { timezone } = timing;
+  const start = DateTime.fromJSDate(timing.start).setZone(timezone);
+  const startValue = toZonedLocalInput(timing.start, timezone);
+  const endValue = toZonedLocalInput(timing.end, timezone);
   $("[data-event-dialog-title]").textContent = existing ? "Edit event" : "New event";
   setFormValue(eventForm, "id", existing?.id);
   setFormValue(eventForm, "title", existing?.title);
   setFormValue(eventForm, "start", startValue);
   setFormValue(eventForm, "end", endValue);
-  setFormValue(eventForm, "allDay", existing?.allDay ?? false);
+  setFormValue(eventForm, "allDay", timing.allDay);
   setFormValue(eventForm, "timezone", timezone);
   setFormValue(eventForm, "subjectId", existing?.subjectId);
   setFormValue(eventForm, "classId", existing?.classId);
@@ -824,8 +885,10 @@ async function saveSettings(): Promise<void> {
 }
 
 function initializeCalendar(): void {
-  calendar = new Calendar($<HTMLElement>("#calendar"), fullCalendarOptions());
+  const calendarRoot = $<HTMLElement>("#calendar");
+  calendar = new Calendar(calendarRoot, fullCalendarOptions());
   calendar.render();
+  attachCalendarPopoverEnhancements(calendarRoot);
 }
 
 function initializeTimezones(): void {
@@ -862,7 +925,7 @@ function initializeInteractions(): void {
   eventStartInput.addEventListener("change", reconcileEventEndAfterStart);
   eventEndInput.addEventListener("input", () => validateEventTimeFields());
   eventTimezoneInput.addEventListener("change", () => validateEventTimeFields());
-  $<HTMLInputElement>("[name='allDay']", eventForm).addEventListener("change", () => validateEventTimeFields());
+  $<HTMLInputElement>("[name='allDay']", eventForm).addEventListener("change", handleAllDayChange);
   $("[data-revision-search]").addEventListener("input", renderRevisionTable);
   $("[data-revision-filter]").addEventListener("change", renderRevisionTable);
   $("[data-revision-sort]").addEventListener("change", renderRevisionTable);
@@ -870,7 +933,7 @@ function initializeInteractions(): void {
     const target = event.target as HTMLElement;
     const open = target.closest<HTMLElement>("[data-agenda-event]");
     const log = target.closest<HTMLElement>("[data-log-event]");
-    if (open) openEventDialog(open.dataset.agendaEvent);
+    if (open) openEventDialog({ id: open.dataset.agendaEvent });
     if (log) void logEvent(log.dataset.logEvent!);
   });
   $("[data-revision-body]").addEventListener("click", (event) => {
