@@ -1,0 +1,14 @@
+{
+  "airports": {
+    "url": "https://raw.githubusercontent.com/davidmegginson/ourairports-data/c263f96aed8f4f7cc2832c4faf5712248e28f3dc/airports.csv",
+    "sha256": "37b78b5514711a70fb50e0f4c60b809b30988a84e37b0d814e20ca5591177cc1"
+  },
+  "countries": {
+    "url": "https://raw.githubusercontent.com/davidmegginson/ourairports-data/c263f96aed8f4f7cc2832c4faf5712248e28f3dc/countries.csv",
+    "sha256": "2a9dbee691125b0cdb8ceb5fe227c48c903f99c488963b8e53e2ab366521c639"
+  },
+  "timezones": {
+    "url": "https://raw.githubusercontent.com/jpatokal/openflights/7d1a611e070295dba776d6afb86e57d0d1aa1cef/data/airports.dat",
+    "sha256": "9387cdb38df5bd664da823f8ccb69fdd9b33a1888f5b7cca09c34a3cd9ff59f9"
+  }
+}

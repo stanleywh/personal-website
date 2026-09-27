@@ -1,0 +1,56 @@
+const { PGlite } = await import(process.env.BNO_PGLITE_MODULE || '@electric-sql/pglite');
+import fs from 'node:fs';
+import assert from 'node:assert/strict';
+const db = new PGlite();
+await db.exec(`create role anon; create role authenticated; create schema auth; create schema private;
+create table auth.users(id uuid primary key);
+create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;
+grant usage on schema auth, public to authenticated, anon; grant execute on function auth.uid() to authenticated, anon;`);
+await db.exec(fs.readFileSync(new URL('../../supabase/migrations/20260926154027_bno_residence_tracker.sql', import.meta.url),'utf8'));
+const a='11111111-1111-4111-8111-111111111111', b='22222222-2222-4222-8222-222222222222';
+await db.query('insert into auth.users values ($1),($2)',[a,b]);
+const login=async id=>{await db.exec('reset role'); await db.query("select set_config('request.jwt.claim.sub',$1,false)",[id]);await db.exec('set role authenticated');};
+const fails=async(fn,pattern)=>{await assert.rejects(fn,pattern);};
+const tables=['travel_flights','manual_trips','planned_trips','residency_settings'];
+const airport=JSON.stringify({code:'LHR',countryCode:'GB',timezone:'Europe/London',uk:true});
+await login(a);
+const rows={};
+rows.travel_flights=(await db.query(`insert into travel_flights(user_id,departure_airport,arrival_airport,departure_at,arrival_at) values($1,$2,$2,'2026-01-01T10:00Z','2026-01-01T12:00Z') returning id`,[a,airport])).rows[0].id;
+rows.manual_trips=(await db.query(`insert into manual_trips(user_id,departed_uk_date,returned_uk_date) values($1,'2026-01-01','2026-01-04') returning id`,[a])).rows[0].id;
+rows.planned_trips=(await db.query(`insert into planned_trips(user_id,departure_date,return_date) values($1,'2026-02-01','2026-02-04') returning id`,[a])).rows[0].id;
+await db.query('insert into residency_settings(user_id) values($1)',[a]);
+for(const t of tables){
+ const key=t==='residency_settings'?'user_id':'id',id=t==='residency_settings'?a:rows[t];
+ assert.equal((await db.query(`select count(*)::int n from ${t}`)).rows[0].n,1);
+ assert.equal((await db.query(`update ${t} set user_id=$1 where ${key}=$2 and version=1 returning version`,[a,id])).rows[0].version,2);
+ assert.equal((await db.query(`update ${t} set user_id=$1 where ${key}=$2 and version=1 returning version`,[a,id])).rows.length,0,'optimistic locking');
+ await fails(()=>db.query(`update ${t} set user_id=$1 where ${key}=$2`,[b,id]),/ownership|row-level/i);
+}
+await login(b);
+for(const t of tables){
+ assert.equal((await db.query(`select count(*)::int n from ${t}`)).rows[0].n,0,'foreign select');
+ assert.equal((await db.query(`update ${t} set version=42 returning *`)).rows.length,0,'foreign update');
+ assert.equal((await db.query(`delete from ${t} returning *`)).rows.length,0,'foreign delete');
+}
+await fails(()=>db.query('insert into residency_settings(user_id) values($1)',[a]),/row-level/i);
+await fails(()=>db.query(`insert into manual_trips(user_id,departed_uk_date) values($1,'2026-01-01')`,[a]),/row-level/i);
+await fails(()=>db.query(`insert into planned_trips(user_id,departure_date,return_date) values($1,'2026-01-01','2026-01-02')`,[a]),/row-level/i);
+await fails(()=>db.query(`insert into travel_flights(user_id,departure_airport,arrival_airport,departure_at,arrival_at) values($1,$2,$2,'2026-01-01T10:00Z','2026-01-01T12:00Z')`,[a,airport]),/row-level/i);
+await fails(()=>db.query('select bno_convert_plan($1,2)',[rows.planned_trips]),/not found/i);
+await fails(()=>db.query(`insert into planned_trips(user_id,departure_date,return_date,flight_ids) values($1,'2026-01-01','2026-01-02',$2::uuid[])`,[b,[rows.travel_flights]]),/same user/i);
+await login(a);
+await fails(()=>db.query('select bno_convert_plan($1,1)',[rows.planned_trips]),/changed/i);
+const converted=(await db.query('select bno_convert_plan($1,2) id',[rows.planned_trips])).rows[0].id;
+assert.equal((await db.query('select bno_convert_plan($1,2) id',[rows.planned_trips])).rows[0].id,converted,'idempotent conversion');
+assert.equal((await db.query('select count(*)::int n from manual_trips')).rows[0].n,2);
+await fails(()=>db.query('select bno_delete_flights($1)',[JSON.stringify([{id:rows.travel_flights,version:2},{id:'33333333-3333-4333-8333-333333333333',version:1}])]),/changed|unavailable/i);
+assert.equal((await db.query('select count(*)::int n from travel_flights')).rows[0].n,1,'failed deletion is atomic');
+await db.query('select bno_delete_flights($1)',[JSON.stringify([{id:rows.travel_flights,version:2}])]);
+assert.equal((await db.query('select count(*)::int n from travel_flights')).rows[0].n,0);
+await db.exec('reset role; set role anon');
+for(const t of tables) for(const sql of [`select * from ${t}`,`delete from ${t}`,`update ${t} set version=2`]) await fails(()=>db.exec(sql),/permission denied/i);
+await fails(()=>db.query('select bno_convert_plan($1,2)',[rows.planned_trips]),/permission denied/i);
+await db.exec('reset role'); await db.query('delete from auth.users where id=$1',[a]);
+for(const t of tables) assert.equal((await db.query(`select count(*)::int n from ${t}`)).rows[0].n,0,'account cascade');
+console.log('PASS: migration, two-user CRUD/RLS, anonymous denial, ownership, concurrency, conversion idempotency, transactional delete and account cascades.');
+await db.close();
