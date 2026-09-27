@@ -31,6 +31,7 @@ const page=await context.newPage(),errors=[];
 page.on('pageerror',e=>errors.push(e.message));
 await page.goto(`${process.env.BNO_TEST_URL || 'http://127.0.0.1:5177'}/bno/`);
 await page.locator('[data-bno-shell]').waitFor({state:'visible'});
+assert.equal(await page.locator('[data-mode]').count(),0,'global planning toggle removed');
 await page.getByText('No travel recorded yet.').waitFor();
 await page.screenshot({path:`${outputDir}/empty-desktop.png`,fullPage:true});
 await page.locator('[data-tab="settings"]').click();
@@ -38,6 +39,8 @@ await page.locator('[name="bno_start_date"]').fill('2021-01-01');
 await page.locator('[name="coverage_start"]').fill('2021-01-01');
 await page.locator('[name="initial_location"]').selectOption('uk');
 await page.locator('[name="citizenship_application_date"]').fill('2027-01-01');
+assert.equal(await page.locator('[name="planning_mode"]').inputValue(),'official');
+assert.match(await page.locator('#h-planning_mode').innerText(),/personal buffer/);
 await page.getByRole('button',{name:'Save settings',exact:true}).click();
 await page.waitForFunction(()=>document.querySelector('[data-sync]').textContent.includes('Synced'));
 await page.locator('[data-add="flight"]').first().click();
@@ -54,6 +57,11 @@ await page.locator('[name="departure_date"]').fill('2026-09-11');await page.loca
 await page.locator('[data-editor] [type="submit"]').click();await page.locator('[data-editor]').waitFor({state:'hidden'});
 await page.locator('[data-tab="overview"]').click();
 assert.match(await page.locator('#bno-content').innerText(),/70/);assert.match(await page.locator('#bno-content').innerText(),/72/);
+const worstOverview=await page.locator('.bno-card').filter({hasText:'Worst official 12-month window'}).innerText();
+assert.match(worstOverview,/70 \/ 180 official days/);
+assert.match(worstOverview,/11 Sep 2025 → 10 Sep 2026/);
+assert.match(worstOverview,/Conservative count in this same window: 71 \/ 180/);
+assert.match(worstOverview,/Worst conservative window[\s\S]*72 \/ 180[\s\S]*12 Sep 2025 → 11 Sep 2026/i);
 console.log('visual styles',await page.evaluate(()=>({body:getComputedStyle(document.body).backgroundColor,skipTop:document.querySelector('.skip-link').getBoundingClientRect().top,skipFocus:document.activeElement?.className})));
 await page.screenshot({path:`${outputDir}/overview-desktop.png`,fullPage:true});
 for(const width of [1440,1280,834,390]){
@@ -61,16 +69,58 @@ for(const width of [1440,1280,834,390]){
  for(const tab of ['overview','history','calendar','analysis','planning','settings']){
   await page.locator(`[data-tab="${tab}"]`).click();
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1),false,`${tab} overflow at ${width}`);
-  if(tab==='calendar'){assert.equal(await page.locator('.fc-daygrid-day').count()>=28,true);assert.equal(await page.locator('[data-calendar-body]').evaluate(el=>el.getBoundingClientRect().height>400),true,'visible month grid');}
+  if(tab==='calendar'){assert.equal(await page.locator('.fc-daygrid-day').count()>=28,true);assert.equal(await page.locator('[data-calendar-body]').evaluate(el=>el.getBoundingClientRect().height>400),true,'visible month grid');assert.equal(await page.locator('[data-calendar-plans]').count(),0,'planned-trip checkbox hidden without plans');}
+  if(tab==='analysis'){assert.equal(await page.locator('[data-worst-conservative]').count(),1);assert.match(await page.locator('[data-worst-conservative]').innerText(),/12 Sep 2025 → 11 Sep 2026/);}
   if(width===390)await page.screenshot({path:`${outputDir}/${tab}-mobile.png`,fullPage:true});
  }
 }
 await page.setViewportSize({width:1440,height:1000});
 await page.locator('[data-tab="calendar"]').click();await page.locator('[data-calendar-view="year"]').click();await page.screenshot({path:`${outputDir}/year-desktop.png`,fullPage:true});
-await page.locator('[data-tab="planning"]').click();await page.locator('[name="departure"]').fill('2026-10-01');await page.locator('[name="returned"]').fill('2026-10-11');await page.getByRole('button',{name:'Simulate trip',exact:true}).click();assert.match(await page.locator('[data-simulation]').innerText(),/Official: 9/);
+await page.locator('[data-tab="planning"]').click();await page.locator('[name="departure"]').fill('2026-10-01');await page.locator('[name="returned"]').fill('2026-10-11');await page.getByRole('button',{name:'Simulate trip',exact:true}).click();assert.match(await page.locator('[data-simulation]').innerText(),/Official absence: 9 days/);
+await page.setViewportSize({width:390,height:844});
+assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1),false,'mobile simulation overflow');
+await page.screenshot({path:`${outputDir}/planning-result-mobile.png`,fullPage:true});
+await page.setViewportSize({width:1440,height:1000});
+assert.equal(await page.locator('[name="close"]').count(),0,'one-option Journey selector removed');
+assert.equal(await page.locator('[name="scope"]').count(),0,'saved-plan selector hidden without active plans');
 await page.locator('[data-latest]').click();await page.locator('[data-simulation]').getByText('Official calculation',{exact:true}).waitFor({timeout:30000});
 assert.match(await page.locator('[data-simulation]').innerText(),/180/);
+assert.equal(await page.locator('[data-latest-official]').count(),1);
+assert.equal(await page.locator('[data-latest-conservative]').count(),1);
+assert.match(await page.locator('[data-latest-official]').innerText(),/Planning recommendation/);
+await page.locator('[data-tab="settings"]').click();
+await page.locator('[name="planning_mode"]').selectOption('conservative');
+await page.getByRole('button',{name:'Save settings',exact:true}).click();
+await page.waitForFunction(()=>document.querySelector('[name="planning_mode"]')?.value==='conservative' && !document.querySelector('[data-settings-form] button[type="submit"]')?.disabled);
+assert.equal(db.residency_settings[0].planning_mode,'conservative');
+await page.locator('[data-tab="overview"]').click();
+assert.match(await page.locator('.bno-card').filter({hasText:'Worst official 12-month window'}).innerText(),/70 \/ 180 official days/);
+await page.locator('[data-tab="planning"]').click();
+await page.locator('[name="departure"]').fill('2026-10-01');
+await page.locator('[name="returned"]').fill('2026-10-11');
+await page.getByRole('button',{name:'Simulate trip',exact:true}).click();
+assert.match(await page.locator('[data-simulation]').innerText(),/Planning warning \(conservative buffer\)/);
+assert.match(await page.locator('[data-simulation]').innerText(),/Official absence: 9 days/);
+await page.locator('[data-latest]').click();
+await page.locator('[data-latest-conservative]').getByText('Planning recommendation').waitFor({timeout:30000});
+assert.equal(await page.locator('[data-latest-official] .bno-recommendation').count(),0);
+await page.setViewportSize({width:390,height:844});
+assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1),false,'mobile latest-return overflow');
+await page.screenshot({path:`${outputDir}/latest-return-mobile.png`,fullPage:true});
+await page.setViewportSize({width:1440,height:1000});
 assert.equal(db.travel_flights.length,2);assert.equal(db.manual_trips.length,0);assert.equal(db.planned_trips.length,0);
+db.manual_trips.push({id:'open-trip',version:1,departed_uk_date:'2026-09-20',returned_uk_date:null,countries:['France'],departure_location:'',return_location:'',notes:''});
+db.planned_trips.push({id:'saved-plan',version:1,departure_date:'2027-02-01',return_date:'2027-02-05',destination:'Japan',notes:'',status:'planned'});
+await page.locator('[data-refresh]').click();
+await page.waitForFunction(()=>document.querySelector('[data-sync]')?.textContent.includes('Synced'));
+await page.locator('[data-tab="planning"]').click();
+assert.match(await page.locator('[data-open-trip]').innerText(),/return from France/);
+assert.equal(await page.locator('[name="close"]').count(),0,'single open trip shown without a selector');
+assert.equal(await page.locator('[name="departure"]').inputValue(),'2026-09-20');
+assert.equal(await page.locator('[name="departure"]').getAttribute('readonly'),'');
+assert.equal(await page.locator('[name="scope"]').count(),1,'saved plans remain selectable');
+await page.locator('[data-tab="calendar"]').click();
+assert.equal(await page.locator('[data-calendar-plans]').count(),1,'planned-trip checkbox available with an active plan');
 await page.locator('[data-add="manual"]').first().click();await page.setViewportSize({width:390,height:844});await page.screenshot({path:`${outputDir}/manual-modal-mobile.png`,fullPage:true});
 await page.keyboard.press('Escape');await page.locator('[data-editor]').waitFor({state:'hidden'});
 // Offline reading and planner simulations do not issue writes.
@@ -84,5 +134,5 @@ await page.evaluate(async()=>{const {authController}=await import('/src/auth/ses
 await page.waitForURL('**/account/**');assert.equal(await page.evaluate(()=>Object.keys(localStorage).some(k=>k.startsWith('bno:user:'))),false,'logout cache cleared');
 assert.deepEqual(errors,[]);
 fs.writeFileSync(`${outputDir}/browser-result.json`,JSON.stringify({passed:true,widths:[1440,1280,834,390],errors,flights:db.travel_flights.length},null,2));
-console.log('PASS: empty state, settings, keyboard airport search, flight CRUD, 70/72 totals, all six sections at four widths, calendars, simulator, worker, modal Escape, no horizontal overflow or browser errors.');
+console.log('PASS: BNO counts and window labels, planning modes, conditional controls, all six sections at four widths, simulator and latest-return mobile layouts, calendars, modal focus, offline cache and logout.');
 await browser.close();
