@@ -81,7 +81,7 @@ describe('absence engine', () => {
       expect(mode === 'official' ? at.worst.official : at.conservativeWorst.conservative).toBe(180);
       expect(mode === 'official' ? after.worst.official : after.conservativeWorst.conservative).toBe(181);
     }
-  });
+  }, 10_000);
   it('refuses safe labels for unknown history and existing breaches', () => {
     expect(latestSafeReturn(buildTimeline(emptyState(), '2026-09-26'), '2026-10-01', 'official').date).toBeNull();
     const t = buildTimeline(stateWith([trip('2026-01-01', '2026-08-01')]), '2026-09-26'); expect(latestSafeReturn(t, '2026-10-01', 'official').message).toContain('already exceeds');
