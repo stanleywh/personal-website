@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Private BNO and UK residence travel tracker"><title>BNO — Stanley</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css"><link rel="stylesheet" href="/src/tracker/auth-gate.css">
+</head>
+<body class="bno tracker site-page">
+  <div class="tracker-auth-guard" data-tracker-guard data-state="pending" role="status" aria-live="polite" aria-busy="true">
+    <span class="tracker-auth-guard__spinner" aria-hidden="true"></span><p data-tracker-guard-message>Checking your account…</p>
+    <a href="/account/?mode=login&amp;next=bno">Go to login</a>
+  </div>
+  <div class="page-shell page-shell--tracker bno-shell" data-bno-shell hidden>
+    <a class="skip-link" href="#bno-content">Skip to BNO content</a>
+    <header class="tracker-header">
+      <a class="back-link" href="/"><span aria-hidden="true">←</span> Home</a>
+      <div class="tracker-heading"><h1>BNO</h1><p class="bno-subtitle">UK residence &amp; travel</p></div>
+      <div class="account-actions"><a class="button button--quiet" href="/account/?mode=profile&amp;next=bno">Profile</a></div>
+    </header>
+    <div class="bno-toolbar"><p data-sync role="status" aria-live="polite">Loading travel history…</p><button class="button button--quiet button--compact" data-refresh>Refresh</button></div>
+    <div class="bno-toolbar bno-actions"><div class="segmented" aria-label="Planning mode"><button data-mode="official" aria-pressed="true">Official</button><button data-mode="conservative" aria-pressed="false">Conservative</button></div>
+      <div class="button-group"><button class="button button--quiet" data-add="manual">Add Manual Trip</button><button class="button button--primary" data-add="flight">+ Add Flight</button></div>
+    </div>
+    <nav class="bno-tabs" aria-label="BNO sections">
+      <button data-tab="overview" aria-current="page">Overview</button><button data-tab="history">Travel History</button><button data-tab="calendar">Calendar</button><button data-tab="analysis">Analysis</button><button data-tab="planning">Planning</button><button data-tab="settings">Settings</button>
+    </nav>
+    <p data-page-error class="bno-error" role="alert" hidden></p>
+    <main id="bno-content" tabindex="-1"></main>
+    <details class="surface-card bno-rules"><summary>Rules &amp; information</summary><div data-rules></div></details>
+  </div>
+  <dialog class="modal bno-dialog" data-editor aria-labelledby="editor-title">
+    <form data-editor-form><header class="bno-toolbar"><h2 id="editor-title"></h2><button class="icon-button" type="button" data-close aria-label="Close dialog">×</button></header>
+      <div data-editor-fields class="bno-form-grid"></div><p data-editor-error role="alert" class="bno-error"></p><footer class="bno-dialog-actions"><button type="button" class="button button--quiet" data-close>Cancel</button><button type="submit" class="button button--primary">Save</button></footer>
+    </form>
+  </dialog>
+  <dialog class="modal bno-dialog" data-details aria-labelledby="details-title"><header class="bno-toolbar"><h2 id="details-title">Trip details</h2><button type="button" class="icon-button" data-close-details aria-label="Close trip details">×</button></header><div data-details-content></div></dialog>
+  <dialog class="modal bno-dialog" data-confirm aria-labelledby="confirm-title"><h2 id="confirm-title"></h2><p data-confirm-message></p><p data-confirm-error role="alert"></p><footer class="bno-dialog-actions"><button class="button button--quiet" data-confirm-cancel>Cancel</button><button class="button button--danger" data-confirm-accept>Delete</button></footer></dialog>
+  <script type="module" src="/src/bno/entry.ts"></script>
+</body>
+</html>

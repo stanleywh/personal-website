@@ -1,3 +1,4 @@
+import { clearBnoCache } from "../bno/store";
 import type { AuthChangeEvent, Session, SupabaseClient, User } from "@supabase/supabase-js";
 import {
   isAuthorizationFailure,
@@ -90,6 +91,8 @@ export class AuthController {
   }
 
   private emit(next: AuthSnapshot): AuthSnapshot {
+    const priorUser = this.snapshot.user?.id;
+    if (priorUser && (next.phase === "signedOut" || (next.user && next.user.id !== priorUser))) clearBnoCache(priorUser);
     this.snapshot = next;
     for (const listener of this.listeners) listener(next);
     return next;

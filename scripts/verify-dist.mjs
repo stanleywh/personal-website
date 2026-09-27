@@ -5,6 +5,7 @@ const dist = resolve("dist");
 const expectedHtml = [
   "index.html",
   "tracker/index.html",
+  "bno/index.html",
   "about/index.html",
   "account/index.html",
 ];
@@ -71,7 +72,8 @@ for (const relativePath of expectedHtml) {
 }
 
 const routeExpectations = new Map([
-  ["index.html", ['href="/tracker/"', 'href="/about/"']],
+  ["index.html", ['href="/tracker/"', 'href="/bno/"', 'href="/about/"']],
+  ["bno/index.html", ['href="/"', 'href="/account/?mode=login&amp;next=bno"']],
   ["tracker/index.html", ['href="/"', 'href="/account/?mode=login&amp;next=tracker"']],
   ["about/index.html", ['href="/"', 'href="/tracker/"']],
   ["account/index.html", ['href="/"']],

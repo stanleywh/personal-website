@@ -7,16 +7,17 @@ export type AccountMode =
   | "profile"
   | "complete-profile";
 
-export type PageName = "home" | "tracker" | "account";
-export type ReturnPage = "home" | "tracker";
+export type PageName = "home" | "tracker" | "account" | "bno";
+export type ReturnPage = "home" | "tracker" | "bno";
 
 const pagePaths: Record<PageName, string> = {
   home: "/",
   tracker: "/tracker/",
+  bno: "/bno/",
   account: "/account/",
 };
 
-const allowedDestinations = new Set<ReturnPage>(["home", "tracker"]);
+const allowedDestinations = new Set<ReturnPage>(["home", "tracker", "bno"]);
 
 export function safeNextPage(
   value: string | null | undefined,

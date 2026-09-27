@@ -7,6 +7,7 @@ export default defineConfig({
     rollupOptions: {
       input: {
         home: resolve(__dirname, "index.html"),
+        bno: resolve(__dirname, "bno/index.html"),
         account: resolve(__dirname, "account/index.html"),
         tracker: resolve(__dirname, "tracker/index.html"),
         about: resolve(__dirname, "about/index.html"),

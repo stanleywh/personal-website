@@ -118,3 +118,7 @@ An up-to-date checkout prints `0 0` on the final command. Stop any old Vite proc
 ## Apple companion
 
 The source and XcodeGen specification are in `apple/RevisionTracker`. See its README for macOS/Xcode, signing, redirect, EventKit, and TestFlight setup. Native compilation and device testing cannot be performed from this Windows workspace.
+
+## BNO / UK residence tracker
+
+The authenticated `/bno/` section shares your existing Supabase account and adds flight/manual travel history, dual absence counts, rolling-window analysis, residence calendars and trip planning. It starts empty. Apply the additive BNO migration before deploying; see [BNO setup, calculations and verification](docs/bno/README.md) for the required Auth redirects, airport attribution, test instructions and known limits.
